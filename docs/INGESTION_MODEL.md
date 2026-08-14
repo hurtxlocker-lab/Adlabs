@@ -21,7 +21,7 @@ AdLabs strictly separates external scraper formats from internal domain represen
    ( Domain Normalizer )          <-- Step 4B: Pure deterministic transformation
               │
               ▼
-   ( Ingestion Persistence )      <-- Step 4C1: Brands, Accounts, Runs, Raw Items
+   ( Ingestion Persistence )      <-- Step 4C1 & 4C2: Foundation + Ad & Observation Upsert
 ```
 
 1. **Provider-Specific Area (`src/ingestion/sources/meta/curious-coder/`)**:
@@ -111,3 +111,36 @@ The persistence foundation (`src/ingestion/persistence/`) manages baseline datab
 4. **Append-Only Raw Items**:
    - `saveRawIngestionItem()` writes an immutable record to `raw_ingestion_items`.
    - `payload_hash` is preserved for verification but is deliberately **not** unique, allowing identical raw payloads to be captured across multiple runs.
+
+---
+
+## 5. Ad & Observation Persistence Rules
+
+Ad and observation persistence (`upsertAd`, `createAdObservation`, `persistObservedAd`) enforces domain invariants:
+
+1. **Ad Database Identity**:
+   - Ad canonical identity is `(source, source_ad_id)`.
+   - For Meta, `source = "meta"` and `source_ad_id = SourceAd.sourceAdId` (`ad_archive_id`).
+
+2. **`first_seen_at` Immutability**:
+   - `first_seen_at` is set to database `now()` when an ad is first inserted.
+   - It is **never** modified on subsequent observations or updates.
+
+3. **`last_seen_at` Semantics**:
+   - `last_seen_at` is set to database `now()` on every successful observation.
+   - It reflects AdLabs platform observation time, not provider scheduling dates.
+
+4. **Advertiser / Source-Account Ownership Consistency**:
+   - `SourceAd.advertiser.sourcePageId` must match the tracked `source_accounts.source_page_id`. Mismatches throw `AdvertiserSourceAccountMismatchError`.
+   - An existing ad cannot be silently reparented across different `source_account_id` rows; attempting to do so throws `AdSourceAccountConflictError`.
+
+5. **Append-Only Observations & Duplicate Rejection**:
+   - `ad_observations` records are append-only per `(ad_id, ingestion_run_id)`.
+   - Attempting to process the same ad twice within the same ingestion run throws `DuplicateAdObservationError`.
+
+6. **Short Per-Item Atomic Transaction**:
+   - `persistObservedAd` wraps `saveRawIngestionItem`, `upsertAd`, and `createAdObservation` in an atomic transaction.
+   - If ad or observation persistence fails, the raw item in that transaction rolls back with it.
+   - The outer ingestion run remains intact.
+   - Cards and media assets are excluded from this stage.
+   - Run counters are calculated and passed to `finishIngestionRun` at the orchestration level, not inside individual item transactions.

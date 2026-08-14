@@ -1,5 +1,6 @@
 import type { db } from "@/db/client";
 import type * as schema from "@/db/schema";
+import type { SourceAd } from "@/ingestion/types";
 import type { ExtractTablesWithRelations } from "drizzle-orm";
 import type { PgTransaction } from "drizzle-orm/pg-core";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -16,6 +17,8 @@ export type BrandRow = typeof schema.brands.$inferSelect;
 export type SourceAccountRow = typeof schema.sourceAccounts.$inferSelect;
 export type IngestionRunRow = typeof schema.ingestionRuns.$inferSelect;
 export type RawIngestionItemRow = typeof schema.rawIngestionItems.$inferSelect;
+export type AdRow = typeof schema.ads.$inferSelect;
+export type AdObservationRow = typeof schema.adObservations.$inferSelect;
 
 export interface EnsureBrandInput {
   name: string;
@@ -67,6 +70,45 @@ export interface SaveRawIngestionItemInput {
   payloadHash: string;
 }
 
+export interface UpsertAdInput {
+  sourceAccountId: string;
+  ad: SourceAd;
+}
+
+export interface AdPersistenceResult {
+  ad: AdRow;
+  outcome: "created" | "updated";
+}
+
+export interface CreateAdObservationInput {
+  adId: string;
+  ingestionRunId: string;
+  observedActive: boolean | null;
+  snapshotHash?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PersistObservedAdInput {
+  sourceAccountId: string;
+  ingestionRunId: string;
+  ad: SourceAd;
+  rawPayload: unknown;
+  rawPayloadHash: string;
+  snapshotHash?: string | null;
+  observationMetadata?: Record<string, unknown>;
+}
+
+export interface PersistObservedAdResult {
+  rawItem: RawIngestionItemRow;
+  ad: AdRow;
+  adOutcome: "created" | "updated";
+  observation: AdObservationRow;
+}
+
+// -----------------------------------------------------------------------------
+// Persistence Error Types
+// -----------------------------------------------------------------------------
+
 export class SourceAccountOwnershipConflictError extends Error {
   readonly existingAccount: SourceAccountRow;
   readonly attemptedBrandId: string;
@@ -94,5 +136,49 @@ export class InvalidCounterError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "InvalidCounterError";
+  }
+}
+
+export class AdSourceAccountConflictError extends Error {
+  readonly existingAd: AdRow;
+  readonly attemptedSourceAccountId: string;
+
+  constructor(
+    message: string,
+    existingAd: AdRow,
+    attemptedSourceAccountId: string,
+  ) {
+    super(message);
+    this.name = "AdSourceAccountConflictError";
+    this.existingAd = existingAd;
+    this.attemptedSourceAccountId = attemptedSourceAccountId;
+  }
+}
+
+export class AdvertiserSourceAccountMismatchError extends Error {
+  readonly expectedPageId: string;
+  readonly advertiserPageId: string;
+
+  constructor(
+    message: string,
+    expectedPageId: string,
+    advertiserPageId: string,
+  ) {
+    super(message);
+    this.name = "AdvertiserSourceAccountMismatchError";
+    this.expectedPageId = expectedPageId;
+    this.advertiserPageId = advertiserPageId;
+  }
+}
+
+export class DuplicateAdObservationError extends Error {
+  readonly adId: string;
+  readonly ingestionRunId: string;
+
+  constructor(message: string, adId: string, ingestionRunId: string) {
+    super(message);
+    this.name = "DuplicateAdObservationError";
+    this.adId = adId;
+    this.ingestionRunId = ingestionRunId;
   }
 }
