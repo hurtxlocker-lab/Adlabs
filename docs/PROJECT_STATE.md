@@ -61,6 +61,7 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Cloudflare R2 Object Storage Adapter (Step 4D2 + 4D2.1 + 4D2.2)**: S3-compatible R2 storage adapter (`src/storage/`), true SHA-addressed deterministic storage keys (`media/sha256/<sha256>`), existence check via `HeadObject`, streaming upload via `PutObject`, post-upload verification, and `StoredMediaInput` output without leaking signed URLs or persisting public base URLs as canonical identity. Live-verified against DEV bucket via dedicated `pnpm test:r2` covering PUT, HEAD, metadata, exact-key deletion, and cleanup.
 - **Media Orchestration (Step 4D3 + 4D3.1)**: Two-phase decoupled orchestration (`src/ingestion/media-orchestration/`). Phase A (`prepareAdMedia`) performs external download, SHA-256 calculation, and R2 storage with bounded concurrency (3), temp file cleanup, and in-memory memoization without holding any DB connection. Separation of physical media type (`IMAGE`, `VIDEO`, `UNKNOWN`) from semantic preview usage (`role: "preview"`).
 - **Atomic Single-Ad Workflow (Step 4E)**: Unified two-phase end-to-end single-ad pipeline (`ingestNormalizedAd`). Phase A executes media preparation with zero DB connection; Phase B commits raw payload, ad upsert, card reconciliation, direct/card media reconciliation, and run observation in ONE short atomic PostgreSQL transaction with observation-last guarantee.
+- **Batch Ingestion Run Orchestration (Step 4F)**: Full run-level batch orchestration engine (`runCuriousCoderIngestion`) over in-memory Curious Coder payload arrays. Sequential item processing, item-level failure isolation (`failures` reporting with typed stage classification), truthful counter accumulation (`createdAdsCount` $\rightarrow$ `new_ads_count`, `updatedAdsCount` $\rightarrow$ `updated_ads_count`, uninstrumented media metrics kept at 0), and strict `ingestion_runs` finalization (`SUCCEEDED`, `PARTIAL`, `FAILED`).
 - **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`), database integration tests (`pnpm test:db`), and live R2 smoke test (`pnpm test:r2`).
 
 ---
@@ -113,10 +114,10 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 
 ## Transaction Boundaries
 - **Ingestion Run Lifecycle**: An ingestion run is not one giant transaction. It is created as `RUNNING` via `startIngestionRun()` and finalized to `SUCCEEDED`, `PARTIAL`, or `FAILED` via `finishIngestionRun()`.
-- **Per-Item Atomic Transaction**: `persistObservedAd` runs a short scoped transaction for:
-  `saveRawIngestionItem` $\rightarrow$ `upsertAd` $\rightarrow$ `reconcileAdCards` $\rightarrow$ `createAdObservation`.
-- **Media Decoupling**: Media downloading, object storage, and relationship reconciliation are not yet wired into `persistObservedAd` (deferred to Step 4D3 orchestration).
-- **Run Counters**: Computed and passed at the outer orchestration level.
+- **Per-Item Atomic Transaction**: `persistPreparedObservedAd` runs a short scoped transaction for:
+  `saveRawIngestionItem` $\rightarrow$ `upsertAd` $\rightarrow$ `reconcileAdCards` $\rightarrow$ `reconcileAdMedia` $\rightarrow$ `reconcileCardMedia` $\rightarrow$ `createAdObservation`.
+- **Media Decoupling**: External media downloading and R2 storage execute in Phase A prior to opening the Phase B database transaction.
+- **Run Counters**: Computed and passed at the outer batch orchestration level (`runCuriousCoderIngestion`).
 
 ---
 
@@ -181,9 +182,9 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 ---
 
 ## Immediate Next Step
-**Step 4F — Ingestion Run & Batch Orchestration**
-- **Objective**: Wrap provider batch processing around the verified single-ad workflow (`ingestNormalizedAd`), manage run-level lifecycles (`startIngestionRun` $\rightarrow$ per-item isolation $\rightarrow$ `finishIngestionRun`), and accumulate run counters (`sourceItemsCount`, `newAdsCount`, `updatedAdsCount`, `errorCount`).
-- **Scope**: Batch runner, error isolation per item, run summary reporting.
+**Step 4G — Apify Adapter & Live Smoke Crawl**
+- **Objective**: Build Apify actor integration wrapper and run a tiny controlled real crawl against a single brand's Meta Ad Library page, verifying complete end-to-end ingestion from live scraper JSON through R2 storage and database persistence.
+- **Scope**: Apify client adapter, dataset fetcher, rate-limited live smoke run.
 
 ---
 

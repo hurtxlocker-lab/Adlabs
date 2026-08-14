@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -30,6 +31,10 @@ import {
 describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
   const runId = Math.random().toString(36).substring(2, 9);
   const testPrefix = `test_4c4_${Date.now()}_${runId}`;
+
+  function testSha(seed: string): string {
+    return createHash("sha256").update(`${testPrefix}:${seed}`).digest("hex");
+  }
 
   const createdBrandIds: string[] = [];
   const createdSourceAccountIds: string[] = [];
@@ -1255,14 +1260,10 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
   // Step 4C4 Stored Media Persistence & Reconciliation Tests
   // ---------------------------------------------------------------------------
 
-  const shaImg1 =
-    "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1";
-  const shaVideo1 =
-    "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2";
-  const shaPreview1 =
-    "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3";
-  const shaShared =
-    "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4";
+  const shaImg1 = testSha("img1");
+  const shaVideo1 = testSha("video1");
+  const shaPreview1 = testSha("preview1");
+  const shaShared = testSha("shared");
 
   let createdAssetImg1Id: string;
 
@@ -1678,8 +1679,7 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
   });
 
   it("39. UNKNOWN media type enriches to known type, and known type is not downgraded to UNKNOWN", async () => {
-    const shaEnrichType =
-      "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5";
+    const shaEnrichType = testSha("enrich_type");
 
     // 1. Create with UNKNOWN
     const assetUnknown = await ensureStoredMediaAsset({
@@ -1716,8 +1716,7 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
   });
 
   it("40. conflicting known media types fail with MediaAssetConflictError", async () => {
-    const shaConflictType =
-      "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6";
+    const shaConflictType = testSha("conflict_type");
 
     // 1. Create with IMAGE
     const asset = await ensureStoredMediaAsset({
@@ -1742,8 +1741,7 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
   });
 
   it("41. null MIME enriches to known MIME, known MIME is preserved on null, and conflicting MIME preserves first canonical without failure", async () => {
-    const shaMimeTest =
-      "0707070707070707070707070707070707070707070707070707070707070707";
+    const shaMimeTest = testSha("mime_test");
 
     // 1. Create with null MIME
     const assetNullMime = await ensureStoredMediaAsset({

@@ -399,3 +399,43 @@ Incoming Normalized SourceAd
    R2 objects are immutable and content-addressed by exact SHA-256 (`media/sha256/<sha256>`). They may already exist or be reused in future runs; no compensating delete is performed.
 5. **No Network Inside Transactions**:
    Zero HTTP, DNS, or R2 calls execute while a database transaction is open.
+
+---
+
+## 13. Ingestion Run & Batch Orchestration (Step 4F)
+
+Step 4F wraps the single-ad pipeline in a run-level batch orchestration shell (`runCuriousCoderIngestion`) that processes an in-memory array of provider payload items:
+
+```
+Incoming Provider Items (unknown[])
+  │
+  ├─► Ensure Brand (ensureBrand)
+  ├─► Ensure Source Account (ensureSourceAccount)
+  ├─► Start Ingestion Run (startIngestionRun → status: "RUNNING")
+  │
+  ├─► Sequential Item Loop (index = 0..N-1)
+  │    │  1. increment sourceItemsCount
+  │    │  2. safeParseCuriousCoderItem
+  │    │  3. normalizeCuriousCoderAd
+  │    │  4. verify advertiser.sourcePageId === sourceAccount.sourcePageId
+  │    │  5. ingestNormalizedAd (two-phase single ad engine)
+  │    │  6. isolate failures / accumulate truthful counters
+  │    ▼
+  │
+  └─► Derive Final Status & Finalize (finishIngestionRun)
+       • SUCCEEDED: 0 item failures (including empty batch)
+       • PARTIAL: >=1 success AND >=1 failure
+       • FAILED: 0 successes with >=1 failures, OR run-fatal setup error
+```
+
+### Invariants & Guarantees:
+1. **One Ingestion Run per Execution**: Each invocation creates a distinct new `ingestion_runs` row. Same ads rerun in subsequent executions advance `last_seen_at` and append new observations.
+2. **Item-Level Failure Isolation**: A failure on any single item (parse, normalize, advertiser mismatch, media preparation, or database transaction) is caught, sanitized, and recorded in the run's `failures` array. Earlier and subsequent items process unaffected.
+3. **Sequential Processing**: Ads are processed sequentially to keep database connections, R2 operations, and error reasoning strictly deterministic without cross-item race conditions.
+4. **Truthful Counter Mapping**:
+   - `IngestionRunResult.createdAdsCount` $\rightarrow$ `ingestion_runs.new_ads_count`
+   - `IngestionRunResult.updatedAdsCount` $\rightarrow$ `ingestion_runs.updated_ads_count`
+   - `IngestionRunResult.sourceItemsCount` $\rightarrow$ `ingestion_runs.source_items_count` (includes all attempted items, even parse failures)
+   - Media download counters (`media_downloaded_count`, `bytes_downloaded`, etc.) remain `0` / `0n` as documented uninstrumented metrics in Step 4F.
+5. **Parse-Failure Raw Archival Boundary**: `raw_ingestion_items` records raw payloads for items reaching atomic normalized ad persistence. Provider items rejected by schema validation at the parse stage do not create `raw_ingestion_items` rows in M0.
+6. **Strict Finalization Ownership**: Once `startIngestionRun` succeeds, the runner owns finalization. If `finishIngestionRun` throws, the failure is propagated as an `IngestionRunFatalError` without blind retries or false success results.
