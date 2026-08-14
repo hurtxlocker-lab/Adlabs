@@ -3,24 +3,19 @@ import type {
   DownloadMediaOptions,
   DownloadedMedia,
 } from "@/ingestion/media";
-import type { StoredMediaInput } from "@/ingestion/persistence";
+import type {
+  DbOrTx,
+  PersistPreparedObservedAdInput,
+  PersistPreparedObservedAdResult,
+  PreparedAdMedia,
+  PreparedCardMedia,
+  PreparedMediaRef,
+  StoredMediaInput,
+} from "@/ingestion/persistence";
+import type { SourceAd } from "@/ingestion/types";
 import type { StoreDownloadedMediaOptions } from "@/storage";
 
-export interface PreparedMediaRef {
-  media: StoredMediaInput;
-  position: number;
-  role: string | null;
-}
-
-export interface PreparedCardMedia {
-  cardPosition: number;
-  media: PreparedMediaRef[];
-}
-
-export interface PreparedAdMedia {
-  directMedia: PreparedMediaRef[];
-  cardMedia: PreparedCardMedia[];
-}
+export type { PreparedMediaRef, PreparedCardMedia, PreparedAdMedia };
 
 export type DownloadMediaFn = (
   input: DownloadMediaInput,
@@ -47,6 +42,45 @@ export interface PersistPreparedAdMediaInput {
 
 export interface PersistPreparedAdMediaResult {
   adId: string;
+  directMediaCount: number;
+  cardMediaCount: number;
+  deletedDirectMediaCount: number;
+  deletedCardMediaCount: number;
+}
+
+export type PrepareAdMediaFn = (
+  ad: SourceAd,
+  options?: PrepareAdMediaOptions,
+) => Promise<PreparedAdMedia>;
+
+export type PersistPreparedObservedAdFn = (
+  input: PersistPreparedObservedAdInput,
+  executor?: DbOrTx,
+) => Promise<PersistPreparedObservedAdResult>;
+
+export interface IngestNormalizedAdInput {
+  ingestionRunId: string;
+  sourceAccountId: string;
+  sourceAd: SourceAd;
+  rawPayload: unknown;
+  rawPayloadHash?: string;
+  snapshotHash?: string | null;
+  observationMetadata?: Record<string, unknown>;
+}
+
+export interface IngestNormalizedAdDependencies {
+  prepareAdMedia?: PrepareAdMediaFn;
+  persistPreparedObservedAd?: PersistPreparedObservedAdFn;
+  prepareOptions?: PrepareAdMediaOptions;
+  db?: DbOrTx;
+}
+
+export interface IngestNormalizedAdResult {
+  adId: string;
+  adOutcome: "created" | "updated";
+  rawItemId: string;
+  observationId: string;
+  cardsCount: number;
   directMediaCount: number;
   cardMediaCount: number;
   deletedDirectMediaCount: number;

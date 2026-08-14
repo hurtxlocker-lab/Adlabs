@@ -141,6 +141,45 @@ export interface StoredMediaInput {
   storageKey: string;
 }
 
+export interface PreparedMediaRef {
+  media: StoredMediaInput;
+  position: number;
+  role: string | null;
+}
+
+export interface PreparedCardMedia {
+  cardPosition: number;
+  media: PreparedMediaRef[];
+}
+
+export interface PreparedAdMedia {
+  directMedia: PreparedMediaRef[];
+  cardMedia: PreparedCardMedia[];
+}
+
+export interface PersistPreparedObservedAdInput {
+  sourceAccountId: string;
+  ingestionRunId: string;
+  ad: SourceAd;
+  rawPayload: unknown;
+  rawPayloadHash?: string;
+  preparedMedia: PreparedAdMedia;
+  snapshotHash?: string | null;
+  observationMetadata?: Record<string, unknown>;
+}
+
+export interface PersistPreparedObservedAdResult {
+  rawItem: RawIngestionItemRow;
+  ad: AdRow;
+  adOutcome: "created" | "updated";
+  cards: AdCardRow[];
+  directMediaCount: number;
+  cardMediaCount: number;
+  deletedDirectMediaCount: number;
+  deletedCardMediaCount: number;
+  observation: AdObservationRow;
+}
+
 export interface StoredMediaRef {
   media: StoredMediaInput;
   position: number;
@@ -294,5 +333,26 @@ export class DuplicateMediaRelationshipError extends Error {
     this.parentId = parentId;
     this.sha256 = sha256;
     this.position = position;
+  }
+}
+
+export class PreparedMediaMismatchError extends Error {
+  readonly sourceAdId: string;
+  readonly cardPosition?: number;
+  readonly mediaPosition?: number;
+
+  constructor(
+    message: string,
+    context: {
+      sourceAdId: string;
+      cardPosition?: number;
+      mediaPosition?: number;
+    },
+  ) {
+    super(message);
+    this.name = "PreparedMediaMismatchError";
+    this.sourceAdId = context.sourceAdId;
+    this.cardPosition = context.cardPosition;
+    this.mediaPosition = context.mediaPosition;
   }
 }

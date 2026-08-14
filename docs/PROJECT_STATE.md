@@ -59,7 +59,8 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Stored Media Persistence (Step 4C4 + 4C4.1)**: Deduplication by SHA-256, conservative media type / MIME enrichment, and ad/card relationship reconciliation (`reconcileAdMedia`, `reconcileCardMedia`).
 - **Secure Media Downloader (Step 4D1 + 4D1.1)**: HTTP/HTTPS streaming downloader with multi-address DNS SSRF checks, private IP blocking, manual redirect verification (max 5), single 60s operation-wide deadline, 100 MiB limit, magic-byte sniffing, streaming SHA-256 calculation, and memory-bounded temporary file management.
 - **Cloudflare R2 Object Storage Adapter (Step 4D2 + 4D2.1 + 4D2.2)**: S3-compatible R2 storage adapter (`src/storage/`), true SHA-addressed deterministic storage keys (`media/sha256/<sha256>`), existence check via `HeadObject`, streaming upload via `PutObject`, post-upload verification, and `StoredMediaInput` output without leaking signed URLs or persisting public base URLs as canonical identity. Live-verified against DEV bucket via dedicated `pnpm test:r2` covering PUT, HEAD, metadata, exact-key deletion, and cleanup.
-- **Media Orchestration (Step 4D3)**: Two-phase decoupled orchestration (`src/ingestion/media-orchestration/`). Phase A (`prepareAdMedia`) performs external download, SHA-256 calculation, and R2 storage with bounded concurrency (3), temp file cleanup, and in-memory memoization without holding any DB connection. Phase B (`persistPreparedAdMedia`) reconciles direct and card media relationships atomically in a short database transaction with zero network calls.
+- **Media Orchestration (Step 4D3 + 4D3.1)**: Two-phase decoupled orchestration (`src/ingestion/media-orchestration/`). Phase A (`prepareAdMedia`) performs external download, SHA-256 calculation, and R2 storage with bounded concurrency (3), temp file cleanup, and in-memory memoization without holding any DB connection. Separation of physical media type (`IMAGE`, `VIDEO`, `UNKNOWN`) from semantic preview usage (`role: "preview"`).
+- **Atomic Single-Ad Workflow (Step 4E)**: Unified two-phase end-to-end single-ad pipeline (`ingestNormalizedAd`). Phase A executes media preparation with zero DB connection; Phase B commits raw payload, ad upsert, card reconciliation, direct/card media reconciliation, and run observation in ONE short atomic PostgreSQL transaction with observation-last guarantee.
 - **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`), database integration tests (`pnpm test:db`), and live R2 smoke test (`pnpm test:r2`).
 
 ---
@@ -180,9 +181,9 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 ---
 
 ## Immediate Next Step
-**Step 4E — End-to-End Ingestion Pipeline & Single-Item Atomic Unification**
-- **Objective**: Close the temporary consistency gap by combining Phase A external media preparation with a single unified atomic database transaction (raw item $\rightarrow$ ad upsert $\rightarrow$ card reconciliation $\rightarrow$ media assets & relationships $\rightarrow$ observation recording), followed by run-level orchestration over full provider batches.
-- **Scope**: Unified single-item ingestion function, run counters accumulation, and failure isolation per item.
+**Step 4F — Ingestion Run & Batch Orchestration**
+- **Objective**: Wrap provider batch processing around the verified single-ad workflow (`ingestNormalizedAd`), manage run-level lifecycles (`startIngestionRun` $\rightarrow$ per-item isolation $\rightarrow$ `finishIngestionRun`), and accumulate run counters (`sourceItemsCount`, `newAdsCount`, `updatedAdsCount`, `errorCount`).
+- **Scope**: Batch runner, error isolation per item, run summary reporting.
 
 ---
 

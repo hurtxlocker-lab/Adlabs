@@ -1,30 +1,190 @@
+import { createHash } from "node:crypto";
 import { db } from "@/db/client";
 import { createAdObservation } from "./ad-observations";
 import { reconcileAdCards } from "./ad-cards";
+import { reconcileAdMedia } from "./ad-media";
 import { upsertAd } from "./ads";
+import { reconcileCardMedia } from "./card-media";
+import { validateSourceAndPreparedMediaConsistency } from "./consistency";
 import { saveRawIngestionItem } from "./raw-items";
-import type {
-  DbOrTx,
-  PersistObservedAdInput,
-  PersistObservedAdResult,
+import {
+  PreparedMediaMismatchError,
+  type DbOrTx,
+  type PersistObservedAdInput,
+  type PersistObservedAdResult,
+  type PersistPreparedObservedAdInput,
+  type PersistPreparedObservedAdResult,
 } from "./types";
 
 /**
- * Persists an observed ad within a short, atomic per-item transaction.
+ * Persists an already-prepared observed ad in ONE short, atomic database transaction.
  *
- * Atomic Transaction Scope:
- *  1. saveRawIngestionItem (raw payload archive)
- *  2. upsertAd (canonical ad upsert + ownership validation)
- *  3. reconcileAdCards (deterministic card upsert and stale-card cleanup)
- *  4. createAdObservation (append-only run observation)
+ * This is the PRIMARY / PREFERRED M0 single-item database persistence API.
+ *
+ * Atomic Transaction Scope (Phase B):
+ *  1. validateSourceAndPreparedMediaConsistency (ensures prepared media belongs to this SourceAd)
+ *  2. saveRawIngestionItem (raw payload archive)
+ *  3. upsertAd (canonical ad upsert + ownership validation)
+ *  4. reconcileAdCards (deterministic card upsert and stale-card cleanup)
+ *  5. reconcileAdMedia (direct ad media snapshot)
+ *  6. reconcileCardMedia (card media snapshot by (ad_id, position) + stale card cleanup)
+ *  7. createAdObservation (append-only observation — MUST BE LAST)
  *
  * Invariants:
- *  - If ad persistence, card reconciliation, or observation fails, the entire
- *    transaction rolls back atomically (including the raw item and any card mutations).
- *  - The ingestion run itself lives outside this transaction and survives.
- *  - Observation creation is the final step; if cards fail, no observation is created.
- *  - Run counters are not updated here; they are managed at the run level.
- *  - Media collections remain deferred for subsequent pipeline steps.
+ *  - ZERO network calls (no HTTP, no DNS, no R2) occur inside this transaction.
+ *  - Observation creation is strictly the final step; if cards or media fail, no observation exists.
+ *  - If any step fails, ALL seven database mutations roll back atomically.
+ *  - R2 objects created in Phase A remain intact on rollback (content-addressed, globally reusable).
+ *  - Ingestion run row lives outside this transaction and survives.
+ */
+export async function persistPreparedObservedAd(
+  input: PersistPreparedObservedAdInput,
+  executor?: DbOrTx,
+): Promise<PersistPreparedObservedAdResult> {
+  // Pre-flight consistency validation before opening / executing transaction
+  validateSourceAndPreparedMediaConsistency(input.ad, input.preparedMedia);
+
+  const executeAtomicPersistence = async (
+    tx: DbOrTx,
+  ): Promise<PersistPreparedObservedAdResult> => {
+    // 1. Save raw payload (part of atomic item transaction)
+    const payloadHash =
+      typeof input.rawPayloadHash === "string" &&
+      input.rawPayloadHash.trim().length > 0
+        ? input.rawPayloadHash.trim()
+        : createHash("sha256")
+            .update(JSON.stringify(input.rawPayload ?? {}))
+            .digest("hex");
+
+    const rawItem = await saveRawIngestionItem(
+      {
+        ingestionRunId: input.ingestionRunId,
+        sourceItemId: input.ad.sourceAdId,
+        payload: input.rawPayload,
+        payloadHash,
+      },
+      tx,
+    );
+
+    // 2. Upsert canonical ad
+    const adResult = await upsertAd(
+      {
+        sourceAccountId: input.sourceAccountId,
+        ad: input.ad,
+      },
+      tx,
+    );
+    const adId = adResult.ad.id;
+
+    // 3. Reconcile ad cards (DCO / Carousel / multi-card snapshots)
+    const cardResult = await reconcileAdCards(
+      {
+        adId,
+        cards: input.ad.cards ?? [],
+      },
+      tx,
+    );
+
+    // 4. Reconcile direct ad media
+    const directMediaResult = await reconcileAdMedia(
+      {
+        adId,
+        media: input.preparedMedia.directMedia,
+      },
+      tx,
+    );
+
+    // 5. Reconcile card media by matching card position -> ad_card row
+    const cardMapByPosition = new Map<number, string>();
+    for (const card of cardResult.cards) {
+      cardMapByPosition.set(card.position, card.id);
+    }
+
+    let cardRelationshipsCount = 0;
+    let deletedCardMediaCount = 0;
+    const processedCardPositions = new Set<number>();
+
+    for (const cardMediaItem of input.preparedMedia.cardMedia) {
+      const cardId = cardMapByPosition.get(cardMediaItem.cardPosition);
+      if (!cardId) {
+        throw new PreparedMediaMismatchError(
+          `Cannot persist prepared card media: Card at position ${cardMediaItem.cardPosition} does not exist in database for ad "${adId}".`,
+          {
+            sourceAdId: input.ad.sourceAdId,
+            cardPosition: cardMediaItem.cardPosition,
+          },
+        );
+      }
+
+      const cardRes = await reconcileCardMedia(
+        {
+          adCardId: cardId,
+          media: cardMediaItem.media,
+        },
+        tx,
+      );
+
+      cardRelationshipsCount += cardRes.relationships.length;
+      deletedCardMediaCount += cardRes.deletedCount;
+      processedCardPositions.add(cardMediaItem.cardPosition);
+    }
+
+    // 6. Ensure persisted cards omitted from prepared.cardMedia have their media cleared
+    for (const card of cardResult.cards) {
+      if (!processedCardPositions.has(card.position)) {
+        const clearRes = await reconcileCardMedia(
+          {
+            adCardId: card.id,
+            media: [],
+          },
+          tx,
+        );
+        deletedCardMediaCount += clearRes.deletedCount;
+      }
+    }
+
+    // 7. Create observation (FINAL successful state marker for this item snapshot)
+    const observation = await createAdObservation(
+      {
+        adId,
+        ingestionRunId: input.ingestionRunId,
+        observedActive: input.ad.active ?? null,
+        snapshotHash: input.snapshotHash ?? null,
+        metadata: input.observationMetadata ?? {},
+      },
+      tx,
+    );
+
+    return {
+      rawItem,
+      ad: adResult.ad,
+      adOutcome: adResult.outcome,
+      cards: cardResult.cards,
+      directMediaCount: directMediaResult.relationships.length,
+      cardMediaCount: cardRelationshipsCount,
+      deletedDirectMediaCount: directMediaResult.deletedCount,
+      deletedCardMediaCount,
+      observation,
+    };
+  };
+
+  // If already inside an existing transaction, participate directly
+  if (executor && "rollback" in executor) {
+    return executeAtomicPersistence(executor);
+  }
+
+  // Otherwise, wrap in an atomic per-item transaction
+  const client = executor ?? db;
+  return client.transaction(async (tx) => {
+    return executeAtomicPersistence(tx);
+  });
+}
+
+/**
+ * Lower-level legacy persistence primitive without media orchestration support.
+ *
+ * NOTE: For full M0 ad ingestion with media, use `persistPreparedObservedAd`
+ * or `ingestNormalizedAd`.
  */
 export async function persistObservedAd(
   input: PersistObservedAdInput,

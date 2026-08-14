@@ -11,3 +11,4 @@ export * from "./ad-media";
 export * from "./card-media";
 export * from "./ad-observations";
 export * from "./observed-ads";
+export * from "./consistency";

@@ -355,5 +355,47 @@ To strictly enforce that SHA-256 identifies exact physical bytes, media typing i
    - Usage context (e.g. `primary`, `preview`, `extra`) lives exclusively on relationship metadata (`ad_media.role` and `card_media.role`).
    - If the same physical JPEG is used as an ad image in one place and as a video preview in another, both resolve to the exact same SHA-256 and physical `media_assets` row (`media_type = 'IMAGE'`) without triggering a `MediaAssetConflictError`.
 
+---
 
+## 12. Atomic Single-Ad Ingestion Workflow (Step 4E)
 
+Step 4E closes the temporary consistency gap by unifying media persistence into a single atomic database transaction executed strictly after external media preparation.
+
+```
+Incoming Normalized SourceAd
+  │
+  ├─► PHASE A: External Media Preparation (No DB Connection)
+  │    │  • downloadMedia with bounded concurrency (3)
+  │    │  • Streaming SHA-256 & magic-byte sniffing
+  │    │  • Cloudflare R2 HEAD / streaming PUT
+  │    │  • Guaranteed temp-file cleanup in finally
+  │    ▼
+  │   PreparedAdMedia (In-Memory Contract)
+  │
+  └─► PHASE B: Atomic Database Persistence (Zero Network I/O)
+       │  [BEGIN TRANSACTION]
+       │  1. validateSourceAndPreparedMediaConsistency
+       │  2. saveRawIngestionItem
+       │  3. upsertAd
+       │  4. reconcileAdCards
+       │  5. reconcileAdMedia (direct media snapshot)
+       │  6. reconcileCardMedia (matched strictly by (ad_id, position))
+       │  7. createAdObservation (STRICTLY LAST)
+       │  [COMMIT TRANSACTION]
+       ▼
+      PersistPreparedObservedAdResult
+```
+
+### Invariants & Guarantees:
+1. **Observation-Last Guarantee**:
+   An observation signifies a fully persisted, verified ad snapshot. `createAdObservation` executes strictly after all card and media relationships have successfully committed. If any step fails, no observation exists.
+2. **Raw Ingestion Item Atomicity**:
+   `raw_ingestion_items` insertion participates inside the same per-item transaction. If media persistence fails, the raw item for that attempt rolls back with the ad mutations, preventing partial historical states.
+3. **Failure Semantics**:
+   - **Case A (Preparation Fails)**: `ingestNormalizedAd` rejects with `MediaPreparationError`; zero database operations occur.
+   - **Case B (DB Transaction Fails)**: All 7 database mutations roll back completely; previously uploaded R2 objects remain stored in R2.
+   - **Case C (Success)**: All entities are atomically committed in PostgreSQL.
+4. **No R2 Compensation on DB Rollback**:
+   R2 objects are immutable and content-addressed by exact SHA-256 (`media/sha256/<sha256>`). They may already exist or be reused in future runs; no compensating delete is performed.
+5. **No Network Inside Transactions**:
+   Zero HTTP, DNS, or R2 calls execute while a database transaction is open.
