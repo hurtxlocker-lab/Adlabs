@@ -1,13 +1,16 @@
 /**
- * Empty schema barrel.
+ * Drizzle ORM Schema Definitions for AdLabs M0.
  *
- * Step 3A: no application tables are defined yet.
- * Step 3B will introduce the domain schema here.
- *
- * Drizzle Kit requires a schema path to be configured; this file
- * satisfies that requirement without defining any tables.
+ * Exports all domain tables and relational definitions.
  */
 
-// Makes this file a TypeScript module. Required even when empty.
-// Step 3B will replace this with actual table exports.
-export {};
+export * from "./brands";
+export * from "./source-accounts";
+export * from "./ingestion-runs";
+export * from "./raw-ingestion-items";
+export * from "./ads";
+export * from "./ad-cards";
+export * from "./media-assets";
+export * from "./ad-media";
+export * from "./card-media";
+export * from "./ad-observations";
