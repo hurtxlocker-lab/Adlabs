@@ -18,7 +18,10 @@ AdLabs strictly separates external scraper formats from internal domain represen
    ( Canonical Source Model )     <-- SourceAd, SourceAdCard, SourceMedia (Provider-independent)
               │
               ▼
-   ( Domain Normalizer )          <-- Step 4B: Maps canonical source to database entities
+   ( Domain Normalizer )          <-- Step 4B: Pure deterministic transformation
+              │
+              ▼
+   ( Ingestion Pipeline / DB )    <-- Future Step: Persistence & Storage
 ```
 
 1. **Provider-Specific Area (`src/ingestion/sources/meta/curious-coder/`)**:
@@ -59,3 +62,27 @@ AdLabs strictly separates external scraper formats from internal domain represen
 ### F. No `Creative` Abstraction in M0
 - There is deliberately no `Creative` or `CreativeGroup` type in M0.
 - Raw observation entities are factual: `SourceAd`, `SourceAdCard`, and `SourceMedia`. Analytical clustering into conceptual creatives will occur in later milestones.
+
+---
+
+## 3. Pure Normalization & Media Extraction Rules
+
+The normalizer (`normalizeCuriousCoderAd`) is a pure, deterministic function transforming validated provider data into `SourceAd` without I/O or state:
+
+1. **Video Rendition Precedence (HD > SD)**:
+   - If `video_hd_url` exists, emit one `video` candidate with role `primary` (or `extra`).
+   - Else if `video_sd_url` exists, emit `video` with role `primary` (or `extra`).
+   - HD and SD are renditions of the same physical media; only the highest quality candidate is emitted.
+   - `video_preview_image_url` is extracted as a separate candidate (`type: "video_preview"`, `role: "preview"`).
+
+2. **Image Rendition Precedence (Original > Resized)**:
+   - If `original_image_url` exists, emit one `image` candidate with role `primary` (or `extra`).
+   - Else if `resized_image_url` exists, emit `image` with role `primary` (or `extra`).
+
+3. **URL-Level Candidate Deduplication vs Physical Deduplication**:
+   - Exact duplicate candidate items `(type, sourceUrl, role)` within a single ad are conservatively deduped.
+   - Different URLs are **never** deduped during normalization; physical deduplication is based exclusively on `sha256` hashes computed after downloading in subsequent pipeline steps.
+
+4. **Card Independence**:
+   - Multi-card (carousel/DCO) copy and card-specific media remain isolated inside `SourceAdCard.media` with zero-indexed positions (`0, 1, 2...`).
+   - Parent copy and card copy are never flattened or interpolated.

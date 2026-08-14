@@ -29,8 +29,8 @@ describe("Curious Coder Provider Parser", () => {
     expect(result.data.snapshot?.page_id).toBe("50982347199");
     expect(result.data.snapshot?.page_name).toBe("Pooja Beauty Secrets");
     // Branded content sponsor is the brand
-    expect(result.data.snapshot?.branded_content_page_id).toBe("10982347102");
-    expect(result.data.snapshot?.branded_content_page_name).toBe("Mamaearth India");
+    expect(result.data.snapshot?.branded_content?.page_id).toBe("10982347102");
+    expect(result.data.snapshot?.branded_content?.page_name).toBe("Mamaearth India");
   });
 
   it("should parse a DCO image cards fixture with multiple child cards", () => {
@@ -127,7 +127,9 @@ describe("Curious Coder Provider Parser", () => {
         collation_id: 55443322,
         snapshot: {
           page_id: 11223344,
-          branded_content_page_id: 99887766,
+          branded_content: {
+            page_id: 99887766,
+          },
         },
       };
       const result = parseCuriousCoderItem(safeNumericItem);
@@ -135,7 +137,7 @@ describe("Curious Coder Provider Parser", () => {
       expect(result.data.page_id).toBe("987654321");
       expect(result.data.collation_id).toBe("55443322");
       expect(result.data.snapshot?.page_id).toBe("11223344");
-      expect(result.data.snapshot?.branded_content_page_id).toBe("99887766");
+      expect(result.data.snapshot?.branded_content?.page_id).toBe("99887766");
     });
 
     it("should succeed when ad_id is null, empty, or omitted", () => {

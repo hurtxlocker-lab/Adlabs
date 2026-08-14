@@ -97,6 +97,20 @@ export const curiousCoderCardSchema = z
   .passthrough();
 
 /**
+ * Branded content sponsor structure under snapshot.branded_content.
+ */
+export const curiousCoderBrandedContentSchema = z
+  .object({
+    page_id: optionalProviderIdSchema,
+    page_name: z.string().nullable().optional(),
+    page_profile_uri: z.string().nullable().optional(),
+    id: optionalProviderIdSchema,
+    name: z.string().nullable().optional(),
+    profile_uri: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+/**
  * Snapshot object representing the rendered creative and publisher state.
  */
 export const curiousCoderSnapshotSchema = z
@@ -105,9 +119,7 @@ export const curiousCoderSnapshotSchema = z
     page_name: z.string().nullable().optional(),
     page_profile_uri: z.string().nullable().optional(),
 
-    branded_content_page_id: optionalProviderIdSchema,
-    branded_content_page_name: z.string().nullable().optional(),
-    branded_content_page_profile_uri: z.string().nullable().optional(),
+    branded_content: curiousCoderBrandedContentSchema.nullable().optional(),
 
     display_format: z.string().nullable().optional(),
 
@@ -203,6 +215,9 @@ export const curiousCoderItemSchema = z
 
 export type CuriousCoderItem = z.infer<typeof curiousCoderItemSchema>;
 export type CuriousCoderSnapshot = z.infer<typeof curiousCoderSnapshotSchema>;
+export type CuriousCoderBrandedContent = z.infer<
+  typeof curiousCoderBrandedContentSchema
+>;
 export type CuriousCoderCard = z.infer<typeof curiousCoderCardSchema>;
 export type CuriousCoderVideo = z.infer<typeof curiousCoderVideoSchema>;
 export type CuriousCoderImage = z.infer<typeof curiousCoderImageSchema>;

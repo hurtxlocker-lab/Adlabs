@@ -18,9 +18,11 @@
     "page_id": "50982347199",
     "page_name": "Pooja Beauty Secrets",
     "page_profile_uri": "https://media.example.test/profiles/pooja-creator.jpg",
-    "branded_content_page_id": "10982347102",
-    "branded_content_page_name": "Mamaearth India",
-    "branded_content_page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+    "branded_content": {
+      "page_id": "10982347102",
+      "page_name": "Mamaearth India",
+      "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg"
+    },
     "display_format": "VIDEO",
     "body": "My everyday secret for glowing monsoon skin! #PaidPartnership with Mamaearth India.",
     "title": "Use code POOJA20 for extra discount",
