@@ -21,7 +21,7 @@ AdLabs strictly separates external scraper formats from internal domain represen
    ( Domain Normalizer )          <-- Step 4B: Pure deterministic transformation
               │
               ▼
-   ( Ingestion Pipeline / DB )    <-- Future Step: Persistence & Storage
+   ( Ingestion Persistence )      <-- Step 4C1: Brands, Accounts, Runs, Raw Items
 ```
 
 1. **Provider-Specific Area (`src/ingestion/sources/meta/curious-coder/`)**:
@@ -44,7 +44,7 @@ AdLabs strictly separates external scraper formats from internal domain represen
 ### B. Advertiser != Publisher != Branded Content Sponsor
 - **Tracked Advertiser (`page_id` / `page_name`)**: The account being tracked/crawled for the brand.
 - **Publisher Page (`snapshot.page_id` / `snapshot.page_name`)**: The Facebook/Instagram page on which the ad actually appears (e.g. an influencer or creator page).
-- **Branded Content Sponsor (`snapshot.branded_content_page_id`)**: The co-branded sponsor tag on creator ads.
+- **Branded Content Sponsor (`snapshot.branded_content.page_id`)**: The co-branded sponsor tag on creator ads.
 - These three identities are maintained independently and never collapsed.
 
 ### C. Collation Opacity
@@ -86,3 +86,28 @@ The normalizer (`normalizeCuriousCoderAd`) is a pure, deterministic function tra
 4. **Card Independence**:
    - Multi-card (carousel/DCO) copy and card-specific media remain isolated inside `SourceAdCard.media` with zero-indexed positions (`0, 1, 2...`).
    - Parent copy and card copy are never flattened or interpolated.
+
+---
+
+## 4. Ingestion Persistence & Lifecycle Rules
+
+The persistence foundation (`src/ingestion/persistence/`) manages baseline database entities for crawls:
+
+1. **Ingestion Run Lifecycle (No Giant Transaction)**:
+   - An ingestion run is initialized as `RUNNING` via `startIngestionRun()`.
+   - Ingestion runs must remain persisted even if subsequent processing fails or crashes.
+   - Individual source items are processed independently using short, scoped transactions.
+   - The run is finalized atomically via `finishIngestionRun()` to `SUCCEEDED`, `PARTIAL`, or `FAILED`. Re-finalizing an already-finished run throws `IngestionRunStateError`.
+
+2. **Identity Resolution vs Metadata Synchronization**:
+   - `ensureBrand(input)` resolves brand identity by unique `slug`.
+   - `ensureSourceAccount(input)` resolves source account identity by `(source, source_page_id)`.
+   - These functions resolve canonical identities race-safely (`ON CONFLICT DO NOTHING`); they **never** silently overwrite existing brand names, URLs, or account metadata.
+
+3. **Source-Account Ownership Conflict Safety**:
+   - If a `(source, source_page_id)` already exists in PostgreSQL linked to a different `brandId`, `ensureSourceAccount` throws `SourceAccountOwnershipConflictError`.
+   - It will **never** silently reassign an existing advertising page from one brand to another.
+
+4. **Append-Only Raw Items**:
+   - `saveRawIngestionItem()` writes an immutable record to `raw_ingestion_items`.
+   - `payload_hash` is preserved for verification but is deliberately **not** unique, allowing identical raw payloads to be captured across multiple runs.

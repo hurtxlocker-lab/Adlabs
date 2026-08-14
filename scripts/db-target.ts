@@ -1,25 +1,25 @@
 /**
  * scripts/db-target.ts
  *
- * Safe database target inspector.
+ * Safe database target inspector and write-safety gatekeeper.
  *
- * Prints connection metadata (host, port, database, SSL) without exposing
- * credentials (username, password, query parameters).
+ * Verifies that DATABASE_URL points to the intended Supabase project
+ * specified by SUPABASE_PROJECT_REF before migrations or writes proceed.
  *
  * Run via:
  *   pnpm db:target
  *
  * Does NOT make a network connection.
- *
- * Implementation note:
- *   @next/env is a CommonJS module with no ESM exports map.
- *   We use createRequire to import it from this ES module context,
- *   matching the pattern Node.js documents for mixed CJS/ESM interop.
+ * Does NOT print passwords, full connection strings, or raw usernames.
  */
 
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import {
+  TargetSafetyError,
+  verifyDatabaseTargetSafety,
+} from "../src/db/target-safety.ts";
 
 // Resolve project root from this script's location (scripts/ is one level down).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,9 +32,10 @@ const { loadEnvConfig } = require("@next/env") as {
 };
 loadEnvConfig(projectRoot);
 
-const raw = process.env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL;
+const expectedProjectRef = process.env.SUPABASE_PROJECT_REF;
 
-if (!raw) {
+if (!databaseUrl) {
   console.error(
     "❌ DATABASE_URL is not set.\n" +
       "   Check your .env.local file (see .env.example).",
@@ -42,46 +43,25 @@ if (!raw) {
   process.exit(1);
 }
 
-let parsed: URL;
 try {
-  parsed = new URL(raw);
-} catch {
-  console.error(
-    "❌ DATABASE_URL is not a valid URL.\n" +
-      "   Expected format: postgresql://user:password@host:port/database",
+  const result = verifyDatabaseTargetSafety(databaseUrl, expectedProjectRef);
+
+  console.log("\nDatabase target:");
+  console.log(`  host:         ${result.host}`);
+  console.log(`  port:         ${result.port}`);
+  console.log(`  database:     ${result.database}`);
+  console.log(`  ssl:          ${result.sslStatus}`);
+  console.log(`  sslmode:      ${result.sslMode}`);
+  console.log(`  project ref:  ${result.redactedProjectRef}`);
+  console.log(`  target match: YES (matches SUPABASE_PROJECT_REF)`);
+  console.log(
+    "\n  ✓ Credentials omitted. Target verified safely without network connection.\n",
   );
+} catch (err) {
+  if (err instanceof TargetSafetyError) {
+    console.error(`\n❌ Target Safety Verification Failed:\n   ${err.message}\n`);
+  } else {
+    console.error(`\n❌ Target Safety Error:\n   ${err}\n`);
+  }
   process.exit(1);
 }
-
-// Validate protocol
-if (parsed.protocol !== "postgresql:" && parsed.protocol !== "postgres:") {
-  console.error(
-    `❌ DATABASE_URL has unexpected protocol: ${parsed.protocol}\n` +
-      "   Expected: postgresql:// or postgres://",
-  );
-  process.exit(1);
-}
-
-const host = parsed.hostname;
-const port = parsed.port || "5432";
-const database = parsed.pathname.replace(/^\//, "") || "(default)";
-const sslMode =
-  parsed.searchParams.get("sslmode") ??
-  "not specified (driver default applies)";
-
-// postgres.js enables SSL automatically for non-localhost hosts.
-const isLocalhost =
-  host === "localhost" || host === "127.0.0.1" || host === "::1";
-const sslStatus = isLocalhost
-  ? "disabled (localhost)"
-  : "required (non-localhost host — postgres.js auto-enables SSL)";
-
-console.log("\nDatabase target:");
-console.log(`  host:     ${host}`);
-console.log(`  port:     ${port}`);
-console.log(`  database: ${database}`);
-console.log(`  ssl:      ${sslStatus}`);
-console.log(`  sslmode:  ${sslMode}`);
-console.log(
-  "\n  ✓ Credentials omitted. No network connection was made.\n",
-);

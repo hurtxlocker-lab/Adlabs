@@ -19,7 +19,18 @@
 // Next.js will throw a build error if a Client Component imports it.
 import "server-only";
 
+import { createRequire } from "node:module";
 import { z } from "zod";
+
+const require = createRequire(import.meta.url);
+const { loadEnvConfig } = require("@next/env") as {
+  loadEnvConfig: (dir: string, dev?: boolean) => void;
+};
+loadEnvConfig(process.cwd(), true);
+
+// Ensure .env.local is also loaded when NODE_ENV=test
+import { loadLocalEnv } from "@/testing/load-env";
+loadLocalEnv();
 
 const serverEnvSchema = z.object({
   /**
@@ -33,6 +44,15 @@ const serverEnvSchema = z.object({
       (val) => val.startsWith("postgresql://") || val.startsWith("postgres://"),
       "DATABASE_URL must be a PostgreSQL connection string (postgresql://... or postgres://...)",
     ),
+
+  /**
+   * Expected Supabase Project Reference (e.g. abcdefghijklmnop).
+   * Required for write-safety target checks in migrations and DB integration tests.
+   */
+  SUPABASE_PROJECT_REF: z
+    .string()
+    .min(1, "SUPABASE_PROJECT_REF must not be empty")
+    .optional(),
 });
 
 const parsed = serverEnvSchema.safeParse(process.env);
