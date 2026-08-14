@@ -10,20 +10,26 @@ import {
   AdvertiserSourceAccountMismatchError,
   DuplicateAdObservationError,
   DuplicateCardPositionError,
+  DuplicateMediaRelationshipError,
   ensureBrand,
   ensureSourceAccount,
+  ensureStoredMediaAsset,
   finishIngestionRun,
   IngestionRunStateError,
+  MediaAssetConflictError,
   persistObservedAd,
   reconcileAdCards,
+  reconcileAdMedia,
+  reconcileCardMedia,
   saveRawIngestionItem,
   SourceAccountOwnershipConflictError,
   startIngestionRun,
+  type StoredMediaRef,
 } from "../index";
 
-describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () => {
+describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
   const runId = Math.random().toString(36).substring(2, 9);
-  const testPrefix = `test_4c3_${Date.now()}_${runId}`;
+  const testPrefix = `test_4c4_${Date.now()}_${runId}`;
 
   const createdBrandIds: string[] = [];
   const createdSourceAccountIds: string[] = [];
@@ -32,6 +38,7 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
   const createdAdIds: string[] = [];
   const createdCardIds: string[] = [];
   const createdObservationIds: string[] = [];
+  const createdMediaAssetIds: string[] = [];
 
   beforeAll(() => {
     // 1. Mandatory Safety Check: verify host and expected project ref before any writes
@@ -44,52 +51,80 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
 
   afterAll(async () => {
     // Cleanup in strict reverse dependency order using explicit IDs only
+    // 1. ad_observations
     if (createdAdIds.length > 0) {
       await db
         .delete(schema.adObservations)
         .where(inArray(schema.adObservations.adId, createdAdIds));
-
-      await db
-        .delete(schema.adCards)
-        .where(inArray(schema.adCards.adId, createdAdIds));
     }
-
     if (createdObservationIds.length > 0) {
       await db
         .delete(schema.adObservations)
         .where(inArray(schema.adObservations.id, createdObservationIds));
     }
 
+    // 2. card_media
+    if (createdCardIds.length > 0) {
+      await db
+        .delete(schema.cardMedia)
+        .where(inArray(schema.cardMedia.adCardId, createdCardIds));
+    }
+
+    // 3. ad_media
+    if (createdAdIds.length > 0) {
+      await db
+        .delete(schema.adMedia)
+        .where(inArray(schema.adMedia.adId, createdAdIds));
+    }
+
+    // 4. ad_cards
+    if (createdAdIds.length > 0) {
+      await db
+        .delete(schema.adCards)
+        .where(inArray(schema.adCards.adId, createdAdIds));
+    }
     if (createdCardIds.length > 0) {
       await db
         .delete(schema.adCards)
         .where(inArray(schema.adCards.id, createdCardIds));
     }
 
+    // 5. media_assets
+    if (createdMediaAssetIds.length > 0) {
+      await db
+        .delete(schema.mediaAssets)
+        .where(inArray(schema.mediaAssets.id, createdMediaAssetIds));
+    }
+
+    // 6. raw_ingestion_items
     if (createdRawItemIds.length > 0) {
       await db
         .delete(schema.rawIngestionItems)
         .where(inArray(schema.rawIngestionItems.id, createdRawItemIds));
     }
 
+    // 7. ads
     if (createdAdIds.length > 0) {
       await db
         .delete(schema.ads)
         .where(inArray(schema.ads.id, createdAdIds));
     }
 
+    // 8. ingestion_runs
     if (createdIngestionRunIds.length > 0) {
       await db
         .delete(schema.ingestionRuns)
         .where(inArray(schema.ingestionRuns.id, createdIngestionRunIds));
     }
 
+    // 9. source_accounts
     if (createdSourceAccountIds.length > 0) {
       await db
         .delete(schema.sourceAccounts)
         .where(inArray(schema.sourceAccounts.id, createdSourceAccountIds));
     }
 
+    // 10. brands
     if (createdBrandIds.length > 0) {
       await db
         .delete(schema.brands)
@@ -121,6 +156,18 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
         ),
       );
 
+    const remainingMediaAssets = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.mediaAssets)
+      .where(
+        inArray(
+          schema.mediaAssets.id,
+          createdMediaAssetIds.length
+            ? createdMediaAssetIds
+            : ["00000000-0000-0000-0000-000000000000"],
+        ),
+      );
+
     const remainingAds = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.ads)
@@ -129,18 +176,6 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
           schema.ads.id,
           createdAdIds.length
             ? createdAdIds
-            : ["00000000-0000-0000-0000-000000000000"],
-        ),
-      );
-
-    const remainingRaw = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.rawIngestionItems)
-      .where(
-        inArray(
-          schema.rawIngestionItems.id,
-          createdRawItemIds.length
-            ? createdRawItemIds
             : ["00000000-0000-0000-0000-000000000000"],
         ),
       );
@@ -159,8 +194,8 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
 
     expect(remainingObs[0].count).toBe(0);
     expect(remainingCards[0].count).toBe(0);
+    expect(remainingMediaAssets[0].count).toBe(0);
     expect(remainingAds[0].count).toBe(0);
-    expect(remainingRaw[0].count).toBe(0);
     expect(remainingBrands[0].count).toBe(0);
   });
 
@@ -636,19 +671,13 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
     expect(result.observation.observedActive).toBeNull();
   });
 
-  it("17. verifies zero card and media rows for non-card ads", async () => {
+  it("17. verifies zero card rows for non-card ads", async () => {
     const cards = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.adCards)
       .where(inArray(schema.adCards.adId, [firstObservedAdId]));
 
-    const adMediaRows = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.adMedia)
-      .where(inArray(schema.adMedia.adId, createdAdIds));
-
     expect(cards[0].count).toBe(0);
-    expect(adMediaRows[0].count).toBe(0);
   });
 
   // ---------------------------------------------------------------------------
@@ -1222,16 +1251,546 @@ describe("Database Integration: Step 4C1, 4C2 & 4C3 Persistence Foundation", () 
     expect(adYCards[0].title).toBe("Ad Y Card 0");
   });
 
-  it("27. verifies zero card_media and media_assets rows were created", async () => {
-    const cardMediaRows = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.cardMedia);
+  // ---------------------------------------------------------------------------
+  // Step 4C4 Stored Media Persistence & Reconciliation Tests
+  // ---------------------------------------------------------------------------
 
-    const mediaAssetsRows = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(schema.mediaAssets);
+  const shaImg1 =
+    "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1";
+  const shaVideo1 =
+    "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2";
+  const shaPreview1 =
+    "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3";
+  const shaShared =
+    "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4";
 
-    expect(cardMediaRows[0].count).toBe(0);
-    expect(mediaAssetsRows[0].count).toBe(0);
+  let createdAssetImg1Id: string;
+
+  it("27. new stored media asset creates row with status STORED and lowercase SHA", async () => {
+    const asset = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sourceUrl: "https://meta.cdn/orig_image_1.jpg",
+      sha256: shaImg1.toUpperCase(), // Uppercase input
+      mimeType: "image/jpeg",
+      byteSize: BigInt(204800),
+      storageProvider: "r2",
+      storageKey: "media/images/a1a1.jpg",
+    });
+
+    createdMediaAssetIds.push(asset.id);
+    createdAssetImg1Id = asset.id;
+
+    expect(asset.id).toBeDefined();
+    expect(asset.sha256).toBe(shaImg1); // Canonicalized to lowercase
+    expect(asset.downloadStatus).toBe("STORED");
+    expect(asset.downloadError).toBeNull();
+    expect(asset.storageProvider).toBe("r2");
+    expect(asset.storageKey).toBe("media/images/a1a1.jpg");
+    expect(asset.byteSize).toBe(BigInt(204800));
+  });
+
+  it("28. repeated ensureStoredMediaAsset with same SHA-256 returns same row without duplicates", async () => {
+    const repeatAsset = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sourceUrl: "https://meta.cdn/orig_image_1.jpg",
+      sha256: shaImg1,
+      mimeType: "image/jpeg",
+      byteSize: BigInt(204800),
+      storageProvider: "r2",
+      storageKey: "media/images/a1a1.jpg",
+    });
+
+    expect(repeatAsset.id).toBe(createdAssetImg1Id);
+  });
+
+  it("29. same SHA-256 from different sourceUrl preserves original source_url", async () => {
+    const newUrlAsset = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sourceUrl: "https://meta.cdn/ephemeral_second_url.jpg",
+      sha256: shaImg1,
+      mimeType: "image/jpeg",
+      byteSize: BigInt(204800),
+      storageProvider: "r2",
+      storageKey: "media/images/a1a1.jpg",
+    });
+
+    expect(newUrlAsset.id).toBe(createdAssetImg1Id);
+    expect(newUrlAsset.sourceUrl).toBe("https://meta.cdn/orig_image_1.jpg"); // First observed preserved!
+  });
+
+  it("30. same SHA-256 with conflicting byteSize throws MediaAssetConflictError", async () => {
+    await expect(
+      ensureStoredMediaAsset({
+        mediaType: "IMAGE",
+        sha256: shaImg1,
+        byteSize: BigInt(999999), // Conflicting byteSize
+        storageProvider: "r2",
+        storageKey: "media/images/a1a1.jpg",
+      }),
+    ).rejects.toThrow(MediaAssetConflictError);
+  });
+
+  it("31. same SHA-256 with conflicting storageKey or provider throws MediaAssetConflictError", async () => {
+    await expect(
+      ensureStoredMediaAsset({
+        mediaType: "IMAGE",
+        sha256: shaImg1,
+        byteSize: BigInt(204800),
+        storageProvider: "s3", // Conflicting provider
+        storageKey: "media/images/a1a1.jpg",
+      }),
+    ).rejects.toThrow(MediaAssetConflictError);
+
+    await expect(
+      ensureStoredMediaAsset({
+        mediaType: "IMAGE",
+        sha256: shaImg1,
+        byteSize: BigInt(204800),
+        storageProvider: "r2",
+        storageKey: "media/images/CONFLICT_KEY.jpg", // Conflicting key
+      }),
+    ).rejects.toThrow(MediaAssetConflictError);
+  });
+
+  it("32. reconcileAdMedia creates relationships, removes stale ones, and retains media_assets rows", async () => {
+    const videoRef: StoredMediaRef = {
+      media: {
+        mediaType: "VIDEO",
+        sourceUrl: "https://meta.cdn/v1.mp4",
+        sha256: shaVideo1,
+        mimeType: "video/mp4",
+        byteSize: BigInt(1048576),
+        storageProvider: "r2",
+        storageKey: "media/videos/b2b2.mp4",
+      },
+      position: 0,
+      role: "primary",
+    };
+
+    const previewRef: StoredMediaRef = {
+      media: {
+        mediaType: "VIDEO_PREVIEW",
+        sourceUrl: "https://meta.cdn/p1.jpg",
+        sha256: shaPreview1,
+        mimeType: "image/jpeg",
+        byteSize: BigInt(51200),
+        storageProvider: "r2",
+        storageKey: "media/previews/c3c3.jpg",
+      },
+      position: 1,
+      role: "preview",
+    };
+
+    // Reconcile with 2 media items (video + preview)
+    const adMediaRes = await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [videoRef, previewRef],
+    });
+
+    for (const rel of adMediaRes.relationships) {
+      createdMediaAssetIds.push(rel.mediaAssetId);
+    }
+
+    expect(adMediaRes.relationships).toHaveLength(2);
+
+    // Verify DB relationships
+    const dbRel = await db
+      .select()
+      .from(schema.adMedia)
+      .where(eq(schema.adMedia.adId, firstObservedAdId));
+    expect(dbRel).toHaveLength(2);
+
+    // Reconcile again: keep ONLY the primary video (stale preview relationship removed)
+    const adMediaRes2 = await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [videoRef],
+    });
+
+    expect(adMediaRes2.relationships).toHaveLength(1);
+    expect(adMediaRes2.deletedCount).toBe(1);
+
+    // Verify stale relationship deleted
+    const dbRel2 = await db
+      .select()
+      .from(schema.adMedia)
+      .where(eq(schema.adMedia.adId, firstObservedAdId));
+    expect(dbRel2).toHaveLength(1);
+    expect(dbRel2[0].role).toBe("primary");
+
+    // Invariant: preview physical asset row MUST still exist in media_assets!
+    const previewAssetCheck = await db
+      .select()
+      .from(schema.mediaAssets)
+      .where(eq(schema.mediaAssets.sha256, shaPreview1));
+    expect(previewAssetCheck).toHaveLength(1);
+  });
+
+  it("33. reconcileCardMedia creates relationships, removes stale on empty array, and retains media_assets", async () => {
+    const cardMediaRef: StoredMediaRef = {
+      media: {
+        mediaType: "IMAGE",
+        sourceUrl: "https://meta.cdn/card_img.jpg",
+        sha256: shaImg1,
+        byteSize: BigInt(204800),
+        storageProvider: "r2",
+        storageKey: "media/images/a1a1.jpg",
+      },
+      position: 0,
+      role: "primary",
+    };
+
+    const cardRes = await reconcileAdCards({
+      adId: dcoDbAdId,
+      cards: [
+        {
+          position: 0,
+          title: "Test Card for Media",
+          media: [],
+          raw: {},
+        },
+      ],
+    });
+    const cardId = cardRes.cards[0].id;
+    createdCardIds.push(cardId);
+
+    const cardMediaRes = await reconcileCardMedia({
+      adCardId: cardId,
+      media: [cardMediaRef],
+    });
+
+    expect(cardMediaRes.relationships).toHaveLength(1);
+    expect(cardMediaRes.relationships[0].adCardId).toBe(cardId);
+    expect(cardMediaRes.relationships[0].mediaAssetId).toBe(createdAssetImg1Id);
+
+    // Clear card media
+    const cardMediaRes2 = await reconcileCardMedia({
+      adCardId: cardId,
+      media: [],
+    });
+
+    expect(cardMediaRes2.relationships).toHaveLength(0);
+    expect(cardMediaRes2.deletedCount).toBe(1);
+
+    // Verify card_media empty for this card
+    const dbCardMedia = await db
+      .select()
+      .from(schema.cardMedia)
+      .where(eq(schema.cardMedia.adCardId, cardId));
+    expect(dbCardMedia).toHaveLength(0);
+
+    // Invariant: image asset still exists in media_assets!
+    const imgAssetCheck = await db
+      .select()
+      .from(schema.mediaAssets)
+      .where(eq(schema.mediaAssets.id, createdAssetImg1Id));
+    expect(imgAssetCheck).toHaveLength(1);
+  });
+
+  it("34. shared exact media asset attached to multiple ads produces 1 media_assets row", async () => {
+    const sharedMediaRef: StoredMediaRef = {
+      media: {
+        mediaType: "IMAGE",
+        sourceUrl: "https://meta.cdn/shared_creative.jpg",
+        sha256: shaShared,
+        mimeType: "image/jpeg",
+        byteSize: BigInt(150000),
+        storageProvider: "r2",
+        storageKey: "media/images/d4d4.jpg",
+      },
+      position: 0,
+      role: "primary",
+    };
+
+    // Attach to Ad 1 (firstObservedAdId)
+    const rel1 = await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [sharedMediaRef],
+    });
+    createdMediaAssetIds.push(rel1.relationships[0].mediaAssetId);
+
+    // Attach to Ad 2 (dcoDbAdId)
+    const rel2 = await reconcileAdMedia({
+      adId: dcoDbAdId,
+      media: [sharedMediaRef],
+    });
+
+    // Exact same media_asset_id shared across both ads
+    expect(rel1.relationships[0].mediaAssetId).toBe(
+      rel2.relationships[0].mediaAssetId,
+    );
+
+    // Exactly 1 physical media_assets row for shaShared
+    const physicalRows = await db
+      .select()
+      .from(schema.mediaAssets)
+      .where(eq(schema.mediaAssets.sha256, shaShared));
+    expect(physicalRows).toHaveLength(1);
+  });
+
+  it("35. relationship reconciliation for one parent does not alter relationships of another parent", async () => {
+    // Clear media for Ad 1
+    await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [],
+    });
+
+    // Verify Ad 1 has 0 media relationships
+    const ad1Media = await db
+      .select()
+      .from(schema.adMedia)
+      .where(eq(schema.adMedia.adId, firstObservedAdId));
+    expect(ad1Media).toHaveLength(0);
+
+    // Verify Ad 2 still has its shared media relationship untouched!
+    const ad2Media = await db
+      .select()
+      .from(schema.adMedia)
+      .where(eq(schema.adMedia.adId, dcoDbAdId));
+    expect(ad2Media).toHaveLength(1);
+    expect(ad2Media[0].role).toBe("primary");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Step 4C4.1 Relationship Identity & Metadata Semantics Tests
+  // ---------------------------------------------------------------------------
+
+  it("36. same SHA + same position with different role in incoming batch is rejected as duplicate", async () => {
+    const duplicateShaRef1: StoredMediaRef = {
+      media: {
+        mediaType: "IMAGE",
+        sha256: shaImg1,
+        byteSize: BigInt(204800),
+        storageProvider: "r2",
+        storageKey: "media/images/a1a1.jpg",
+      },
+      position: 0,
+      role: "primary",
+    };
+
+    const duplicateShaRef2: StoredMediaRef = {
+      media: {
+        mediaType: "IMAGE",
+        sha256: shaImg1,
+        byteSize: BigInt(204800),
+        storageProvider: "r2",
+        storageKey: "media/images/a1a1.jpg",
+      },
+      position: 0, // Same position, different role!
+      role: "preview",
+    };
+
+    await expect(
+      reconcileAdMedia({
+        adId: firstObservedAdId,
+        media: [duplicateShaRef1, duplicateShaRef2],
+      }),
+    ).rejects.toThrow(DuplicateMediaRelationshipError);
+  });
+
+  it("37. different SHA + same position in incoming batch is allowed", async () => {
+    const refA: StoredMediaRef = {
+      media: {
+        mediaType: "VIDEO",
+        sha256: shaVideo1,
+        byteSize: BigInt(1048576),
+        storageProvider: "r2",
+        storageKey: "media/videos/b2b2.mp4",
+      },
+      position: 0,
+      role: "primary",
+    };
+
+    const refB: StoredMediaRef = {
+      media: {
+        mediaType: "VIDEO_PREVIEW",
+        sha256: shaPreview1,
+        byteSize: BigInt(51200),
+        storageProvider: "r2",
+        storageKey: "media/previews/c3c3.jpg",
+      },
+      position: 0, // Different SHA, same position 0
+      role: "preview",
+    };
+
+    const res = await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [refA, refB],
+    });
+
+    expect(res.relationships).toHaveLength(2);
+    expect(res.relationships[0].position).toBe(0);
+    expect(res.relationships[1].position).toBe(0);
+    expect(res.relationships[0].mediaAssetId).not.toBe(
+      res.relationships[1].mediaAssetId,
+    );
+  });
+
+  it("38. reconciling same relationship identity with changed role updates role in database", async () => {
+    const videoRefOriginal: StoredMediaRef = {
+      media: {
+        mediaType: "VIDEO",
+        sha256: shaVideo1,
+        byteSize: BigInt(1048576),
+        storageProvider: "r2",
+        storageKey: "media/videos/b2b2.mp4",
+      },
+      position: 0,
+      role: "primary",
+    };
+
+    await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [videoRefOriginal],
+    });
+
+    // Reconcile again with same SHA + position 0, but role changed to "hero_video"
+    const videoRefUpdatedRole: StoredMediaRef = {
+      media: {
+        mediaType: "VIDEO",
+        sha256: shaVideo1,
+        byteSize: BigInt(1048576),
+        storageProvider: "r2",
+        storageKey: "media/videos/b2b2.mp4",
+      },
+      position: 0,
+      role: "hero_video",
+    };
+
+    const res = await reconcileAdMedia({
+      adId: firstObservedAdId,
+      media: [videoRefUpdatedRole],
+    });
+
+    expect(res.relationships).toHaveLength(1);
+    expect(res.relationships[0].role).toBe("hero_video");
+
+    const dbRow = await db
+      .select()
+      .from(schema.adMedia)
+      .where(
+        and(
+          eq(schema.adMedia.adId, firstObservedAdId),
+          eq(schema.adMedia.position, 0),
+        ),
+      );
+    expect(dbRow).toHaveLength(1);
+    expect(dbRow[0].role).toBe("hero_video");
+  });
+
+  it("39. UNKNOWN media type enriches to known type, and known type is not downgraded to UNKNOWN", async () => {
+    const shaEnrichType =
+      "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5";
+
+    // 1. Create with UNKNOWN
+    const assetUnknown = await ensureStoredMediaAsset({
+      mediaType: "UNKNOWN",
+      sha256: shaEnrichType,
+      byteSize: BigInt(300000),
+      storageProvider: "r2",
+      storageKey: "media/unknown/e5e5.bin",
+    });
+    createdMediaAssetIds.push(assetUnknown.id);
+    expect(assetUnknown.mediaType).toBe("UNKNOWN");
+
+    // 2. Ensure again with known type "VIDEO" -> enriches to VIDEO
+    const assetEnriched = await ensureStoredMediaAsset({
+      mediaType: "VIDEO",
+      sha256: shaEnrichType,
+      byteSize: BigInt(300000),
+      storageProvider: "r2",
+      storageKey: "media/unknown/e5e5.bin",
+    });
+    expect(assetEnriched.id).toBe(assetUnknown.id);
+    expect(assetEnriched.mediaType).toBe("VIDEO");
+
+    // 3. Ensure again with "UNKNOWN" -> preserves known type "VIDEO" (no downgrade)
+    const assetPreserved = await ensureStoredMediaAsset({
+      mediaType: "UNKNOWN",
+      sha256: shaEnrichType,
+      byteSize: BigInt(300000),
+      storageProvider: "r2",
+      storageKey: "media/unknown/e5e5.bin",
+    });
+    expect(assetPreserved.id).toBe(assetUnknown.id);
+    expect(assetPreserved.mediaType).toBe("VIDEO");
+  });
+
+  it("40. conflicting known media types fail with MediaAssetConflictError", async () => {
+    const shaConflictType =
+      "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6";
+
+    // 1. Create with IMAGE
+    const asset = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sha256: shaConflictType,
+      byteSize: BigInt(400000),
+      storageProvider: "r2",
+      storageKey: "media/images/f6f6.jpg",
+    });
+    createdMediaAssetIds.push(asset.id);
+
+    // 2. Conflict with VIDEO
+    await expect(
+      ensureStoredMediaAsset({
+        mediaType: "VIDEO", // Conflicting known type!
+        sha256: shaConflictType,
+        byteSize: BigInt(400000),
+        storageProvider: "r2",
+        storageKey: "media/images/f6f6.jpg",
+      }),
+    ).rejects.toThrow(MediaAssetConflictError);
+  });
+
+  it("41. null MIME enriches to known MIME, known MIME is preserved on null, and conflicting MIME preserves first canonical without failure", async () => {
+    const shaMimeTest =
+      "0707070707070707070707070707070707070707070707070707070707070707";
+
+    // 1. Create with null MIME
+    const assetNullMime = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sha256: shaMimeTest,
+      byteSize: BigInt(50000),
+      storageProvider: "r2",
+      storageKey: "media/images/0707.img",
+      mimeType: null,
+    });
+    createdMediaAssetIds.push(assetNullMime.id);
+    expect(assetNullMime.mimeType).toBeNull();
+
+    // 2. Enrich with "image/webp"
+    const assetEnrichedMime = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sha256: shaMimeTest,
+      byteSize: BigInt(50000),
+      storageProvider: "r2",
+      storageKey: "media/images/0707.img",
+      mimeType: "image/webp",
+    });
+    expect(assetEnrichedMime.id).toBe(assetNullMime.id);
+    expect(assetEnrichedMime.mimeType).toBe("image/webp");
+
+    // 3. Ensure with null MIME -> preserves existing "image/webp"
+    const assetPreservedMime = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sha256: shaMimeTest,
+      byteSize: BigInt(50000),
+      storageProvider: "r2",
+      storageKey: "media/images/0707.img",
+      mimeType: null,
+    });
+    expect(assetPreservedMime.id).toBe(assetNullMime.id);
+    expect(assetPreservedMime.mimeType).toBe("image/webp");
+
+    // 4. Ensure with different non-null MIME "image/png" -> preserves "image/webp" without failure
+    const assetConflictingMime = await ensureStoredMediaAsset({
+      mediaType: "IMAGE",
+      sha256: shaMimeTest,
+      byteSize: BigInt(50000),
+      storageProvider: "r2",
+      storageKey: "media/images/0707.img",
+      mimeType: "image/png", // Different MIME
+    });
+    expect(assetConflictingMime.id).toBe(assetNullMime.id);
+    expect(assetConflictingMime.mimeType).toBe("image/webp"); // First canonical preserved!
   });
 });

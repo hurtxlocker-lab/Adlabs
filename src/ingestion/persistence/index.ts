@@ -6,5 +6,8 @@ export * from "./ingestion-runs";
 export * from "./raw-items";
 export * from "./ads";
 export * from "./ad-cards";
+export * from "./media-assets";
+export * from "./ad-media";
+export * from "./card-media";
 export * from "./ad-observations";
 export * from "./observed-ads";

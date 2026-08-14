@@ -20,6 +20,9 @@ export type RawIngestionItemRow = typeof schema.rawIngestionItems.$inferSelect;
 export type AdRow = typeof schema.ads.$inferSelect;
 export type AdObservationRow = typeof schema.adObservations.$inferSelect;
 export type AdCardRow = typeof schema.adCards.$inferSelect;
+export type MediaAssetRow = typeof schema.mediaAssets.$inferSelect;
+export type AdMediaRow = typeof schema.adMedia.$inferSelect;
+export type CardMediaRow = typeof schema.cardMedia.$inferSelect;
 
 export interface EnsureBrandInput {
   name: string;
@@ -118,6 +121,54 @@ export interface PersistObservedAdResult {
 }
 
 // -----------------------------------------------------------------------------
+// Stored Media Types & Inputs
+// -----------------------------------------------------------------------------
+
+export type StoredMediaType =
+  | "IMAGE"
+  | "VIDEO"
+  | "VIDEO_PREVIEW"
+  | "UNKNOWN";
+
+export interface StoredMediaInput {
+  mediaType: StoredMediaType;
+  sourceUrl?: string | null;
+  sha256: string;
+  mimeType?: string | null;
+  byteSize: bigint;
+  storageProvider: string;
+  storageKey: string;
+}
+
+export interface StoredMediaRef {
+  media: StoredMediaInput;
+  position: number;
+  role?: string | null;
+}
+
+export type EnsureStoredMediaAssetInput = StoredMediaInput;
+
+export interface ReconcileAdMediaInput {
+  adId: string;
+  media: StoredMediaRef[];
+}
+
+export interface ReconcileAdMediaResult {
+  relationships: AdMediaRow[];
+  deletedCount: number;
+}
+
+export interface ReconcileCardMediaInput {
+  adCardId: string;
+  media: StoredMediaRef[];
+}
+
+export interface ReconcileCardMediaResult {
+  relationships: CardMediaRow[];
+  deletedCount: number;
+}
+
+// -----------------------------------------------------------------------------
 // Persistence Error Types
 // -----------------------------------------------------------------------------
 
@@ -204,5 +255,43 @@ export class DuplicateCardPositionError extends Error {
     this.name = "DuplicateCardPositionError";
     this.adId = adId;
     this.duplicatePosition = duplicatePosition;
+  }
+}
+
+export class MediaAssetConflictError extends Error {
+  readonly sha256: string;
+  readonly existingAsset: MediaAssetRow;
+  readonly conflictingInput: StoredMediaInput;
+
+  constructor(
+    message: string,
+    sha256: string,
+    existingAsset: MediaAssetRow,
+    conflictingInput: StoredMediaInput,
+  ) {
+    super(message);
+    this.name = "MediaAssetConflictError";
+    this.sha256 = sha256;
+    this.existingAsset = existingAsset;
+    this.conflictingInput = conflictingInput;
+  }
+}
+
+export class DuplicateMediaRelationshipError extends Error {
+  readonly parentId: string;
+  readonly sha256: string;
+  readonly position: number;
+
+  constructor(
+    message: string,
+    parentId: string,
+    sha256: string,
+    position: number,
+  ) {
+    super(message);
+    this.name = "DuplicateMediaRelationshipError";
+    this.parentId = parentId;
+    this.sha256 = sha256;
+    this.position = position;
   }
 }

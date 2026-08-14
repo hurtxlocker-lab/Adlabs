@@ -21,7 +21,7 @@ AdLabs strictly separates external scraper formats from internal domain represen
    ( Domain Normalizer )          <-- Step 4B: Pure deterministic transformation
               │
               ▼
-   ( Ingestion Persistence )      <-- Step 4C1-4C3: Foundation + Ad/Obs/Cards Persistence
+   ( Ingestion Persistence )      <-- Step 4C1-4C4: Foundation, Ads, Cards & Media Persistence
 ```
 
 1. **Provider-Specific Area (`src/ingestion/sources/meta/curious-coder/`)**:
@@ -170,3 +170,35 @@ Ad card persistence (`reconcileAdCards`) enforces snapshot reconciliation for mu
    - Incoming card positions are validated to be safe non-negative integers. Duplicate positions within an incoming array throw `DuplicateCardPositionError`.
    - Card reconciliation executes inside the `persistObservedAd` per-item transaction between `upsertAd` and `createAdObservation`. If card operations fail, observation creation is aborted and the transaction rolls back.
    - Card media candidate persistence remains deferred for subsequent pipeline steps.
+
+---
+
+## 7. Stored Media Persistence & Relationship Reconciliation Rules
+
+Physical media persistence (`ensureStoredMediaAsset`, `reconcileAdMedia`, `reconcileCardMedia`) handles completed, already-stored media:
+
+1. **Locator vs Exact Physical Identity**:
+   - A `SourceMedia` URL is an ephemeral locator, not physical identity.
+   - Physical media identity is strictly `sha256` (64 hexadecimal characters, lowercase).
+   - SHA-256 is computed upstream only after physical byte retrieval.
+   - MIME type is descriptive metadata, not exact byte identity; `null` MIME enriches to known MIME, while conflicting MIME strings preserve the canonical first-observed MIME without failure.
+
+2. **Persistence Boundary**:
+   - The persistence layer receives already-downloaded, already-stored media (`download_status = "STORED"`).
+   - No network requests, external CDN fetches, hash calculations, or R2 API calls occur in this layer.
+
+3. **Race-Safe Deduplication, Metadata Enrichment & Immutability**:
+   - `ensureStoredMediaAsset` uses `INSERT ... ON CONFLICT (sha256) DO NOTHING`.
+   - When an existing SHA-256 is encountered:
+     - Strict physical invariants (`byte_size`, `storage_provider`, `storage_key`) must match exactly or throw `MediaAssetConflictError`.
+     - Media type allows `UNKNOWN` $\rightarrow$ known type enrichment; conflicting known types throw `MediaAssetConflictError`.
+     - First-observed `source_url` is preserved and not overwritten by subsequent ephemeral URLs.
+     - Storage location is immutable.
+
+4. **Ad & Card Relationship Identity & Reconciliation**:
+   - Relationship identity is `(parent_id, media_asset_id, position)` where `parent_id` is `ad_id` or `ad_card_id` (`role` is excluded from identity).
+   - Within an incoming batch for a parent, duplicate incoming tuples with identical `(SHA-256, position)` are rejected regardless of role.
+   - `role` is mutable snapshot metadata; changes to role on matching relationship identity update the row.
+   - Incoming media sets represent the current observed snapshot; stale relationships are deleted.
+   - Shared physical `media_assets` rows are **never** deleted during relationship reconciliation or ad deletion (no orphan GC in M0).
+   - Deletions are strictly scoped to the specific `ad_id` or `ad_card_id`.
