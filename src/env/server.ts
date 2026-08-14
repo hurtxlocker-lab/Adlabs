@@ -53,6 +53,31 @@ const serverEnvSchema = z.object({
     .string()
     .min(1, "SUPABASE_PROJECT_REF must not be empty")
     .optional(),
+
+  /**
+   * Cloudflare R2 Account ID.
+   */
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+
+  /**
+   * Cloudflare R2 Access Key ID.
+   */
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+
+  /**
+   * Cloudflare R2 Secret Access Key.
+   */
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+
+  /**
+   * Cloudflare R2 Bucket Name.
+   */
+  R2_BUCKET_NAME: z.string().min(1).optional(),
+
+  /**
+   * Optional Cloudflare R2 Public Base URL for presentation/linking.
+   */
+  R2_PUBLIC_BASE_URL: z.string().url().optional().or(z.literal("")).optional(),
 });
 
 const parsed = serverEnvSchema.safeParse(process.env);

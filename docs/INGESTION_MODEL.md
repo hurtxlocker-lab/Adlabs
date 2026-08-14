@@ -243,3 +243,39 @@ The media downloader (`src/ingestion/media/`) retrieves remote media assets safe
 8. **Isolation & Retries**:
    - The downloader has zero awareness of database schemas or object storage (R2).
    - Retries are not performed at the downloader layer (a single deterministic attempt per call).
+
+---
+
+## 9. Cloudflare R2 Object Storage Adapter Rules
+
+The object storage adapter (`src/storage/`) manages content-addressed media persistence in Cloudflare R2:
+
+1. **Object Storage vs Media Identity**:
+   - R2 is a physical object store, not canonical media identity.
+   - Physical media identity is strictly the lowercase 64-hex SHA-256 hash.
+   - Public base URLs and R2 endpoints are configuration/presentation concerns and are **never** stored in the database as persistent media identity.
+
+2. **True SHA-Addressed Deterministic Storage Keys**:
+   - Keys follow the pure SHA-addressed pattern: `media/sha256/<sha256>`.
+   - Keys depend **solely** on the canonical SHA-256 hash of the downloaded bytes.
+   - Keys do **not** contain file extensions, mediaType directories (`images/`, `videos/`, `previews/`), MIME types, brands, ad IDs, timestamps, or URLs.
+   - `IMAGE` and `VIDEO_PREVIEW` sharing the exact same byte payload map to the exact same R2 object key.
+   - Same physical bytes (SHA-256) always resolve to the exact same R2 key.
+
+3. **Existence Check, Upload & Verification Flow**:
+   - `storeDownloadedMedia()` issues a `HeadObject` check against the bucket and key (`media/sha256/<sha256>`).
+   - If the object exists (200): verifies that `ContentLength` matches `byteSize` and that `Metadata.sha256` (if present) matches. If valid, the existing object is reused without uploading, even if the incoming `mediaType` or `mimeType` varies.
+   - If the object is absent (404): streams the temporary file to R2 via `PutObject` with SHA-256 metadata (`Metadata: { sha256 }`), setting `ContentType: mimeType`, then performs a post-upload `HeadObject` verification to confirm storage integrity.
+   - Non-404 `HeadObject` errors (e.g. 403 Forbidden, network failures) fail immediately without attempting `PutObject`.
+
+4. **Upload Idempotency & Concurrency Races**:
+   - If two concurrent workers simultaneously check and find an object missing, both issue `PutObject` for the same deterministic key `media/sha256/<sha256>` with identical bytes and metadata, ensuring logical idempotency.
+
+5. **Lifecycle & Temp File Cleanup Ownership**:
+   - `storeDownloadedMedia()` streams and reads `downloaded.tempFilePath` but does **not** delete it.
+   - Ownership of `downloaded.cleanup()` remains with the outer orchestration layer, allowing clean reuse/recovery if downstream database transactions fail.
+
+6. **Boundary Isolation & Metadata Privacy**:
+   - No database writes occur within the storage adapter.
+   - Semantic `mediaType`, raw source URLs, signed query parameters, and access credentials are never stored in R2 object metadata.
+

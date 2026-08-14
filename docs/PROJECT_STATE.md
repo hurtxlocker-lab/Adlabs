@@ -58,7 +58,8 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Card Reconciliation (Step 4C3)**: Position-based card snapshot reconciliation with stale card deletion (`reconcileAdCards`).
 - **Stored Media Persistence (Step 4C4 + 4C4.1)**: Deduplication by SHA-256, conservative media type / MIME enrichment, and ad/card relationship reconciliation (`reconcileAdMedia`, `reconcileCardMedia`).
 - **Secure Media Downloader (Step 4D1 + 4D1.1)**: HTTP/HTTPS streaming downloader with multi-address DNS SSRF checks, private IP blocking, manual redirect verification (max 5), single 60s operation-wide deadline, 100 MiB limit, magic-byte sniffing, streaming SHA-256 calculation, and memory-bounded temporary file management.
-- **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`) and database integration tests (`pnpm test:db`).
+- **Cloudflare R2 Object Storage Adapter (Step 4D2 + 4D2.1 + 4D2.2)**: S3-compatible R2 storage adapter (`src/storage/`), true SHA-addressed deterministic storage keys (`media/sha256/<sha256>`), existence check via `HeadObject`, streaming upload via `PutObject`, post-upload verification, and `StoredMediaInput` output without leaking signed URLs or persisting public base URLs as canonical identity. Live-verified against DEV bucket via dedicated `pnpm test:r2` covering PUT, HEAD, metadata, exact-key deletion, and cleanup.
+- **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`), database integration tests (`pnpm test:db`), and live R2 smoke test (`pnpm test:r2`).
 
 ---
 
@@ -128,6 +129,7 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Temporary File Ownership**: Caller/storage layer owns cleanup via `DownloadedMedia.cleanup()`; failed downloads unlink partial files immediately.
 - **Stored Media Deduping**: `ensureStoredMediaAsset` uses `INSERT ... ON CONFLICT (sha256) DO NOTHING`. First observed `source_url` is preserved.
 - **Shared Assets**: Shared physical media across multiple ads references a single `media_assets` row; relationships are updated while physical rows are never deleted.
+- **R2 Storage Bridge**: Content-addressed keys derived strictly from SHA-256 (`media/sha256/<sha256>`), `HeadObject` existence verification, `PutObject` with SHA-256 metadata, and post-upload verification.
 
 ---
 
@@ -176,10 +178,9 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 ---
 
 ## Immediate Next Step
-**Step 4D2 — Cloudflare R2 Object Storage Adapter**
-- **Objective**: Take a `DownloadedMedia` temporary file, generate a deterministic content-addressed key (`media/{images|videos|previews}/{sha256}.{ext}`), and upload/reuse the object in Cloudflare R2.
-- **Output**: Produce a valid `StoredMediaInput` compatible with the persistence layer.
-- **Scope**: R2 storage client and tests only; pipeline orchestration remains in Step 4D3.
+**Step 4D3 — Full Ingestion Pipeline & Media Reconciliation Orchestration**
+- **Objective**: Combine raw preservation, normalization, ad persistence, card reconciliation, observation recording, secure media download, R2 object storage, and media relationship reconciliation into the end-to-end ingestion pipeline.
+- **Scope**: Wire `storeDownloadedMedia` and `reconcileAdMedia`/`reconcileCardMedia` with robust error isolation per media item and per ad item.
 
 ---
 
