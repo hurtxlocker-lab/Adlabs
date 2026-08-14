@@ -23,7 +23,6 @@ export const adMedia = pgTable(
       name: "ad_media_pk",
       columns: [table.adId, table.mediaAssetId, table.position],
     }),
-    index("ad_media_ad_id_idx").on(table.adId),
     index("ad_media_media_asset_id_idx").on(table.mediaAssetId),
   ],
 );

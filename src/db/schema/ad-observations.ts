@@ -28,7 +28,6 @@ export const adObservations = pgTable(
       table.adId,
       table.ingestionRunId,
     ),
-    index("ad_observations_ad_id_idx").on(table.adId),
     index("ad_observations_ingestion_run_id_idx").on(table.ingestionRunId),
     index("ad_observations_observed_at_idx").on(table.observedAt),
   ],

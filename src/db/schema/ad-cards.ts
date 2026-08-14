@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { ads } from "./ads";
 import { cardMedia } from "./card-media";
@@ -26,7 +26,6 @@ export const adCards = pgTable(
   },
   (table) => [
     unique("ad_cards_ad_id_position_unique").on(table.adId, table.position),
-    index("ad_cards_ad_id_idx").on(table.adId),
   ],
 );
 

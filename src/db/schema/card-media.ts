@@ -23,7 +23,6 @@ export const cardMedia = pgTable(
       name: "card_media_pk",
       columns: [table.adCardId, table.mediaAssetId, table.position],
     }),
-    index("card_media_ad_card_id_idx").on(table.adCardId),
     index("card_media_media_asset_id_idx").on(table.mediaAssetId),
   ],
 );
