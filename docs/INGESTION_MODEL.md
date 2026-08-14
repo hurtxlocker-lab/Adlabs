@@ -21,7 +21,7 @@ AdLabs strictly separates external scraper formats from internal domain represen
    ( Domain Normalizer )          <-- Step 4B: Pure deterministic transformation
               │
               ▼
-   ( Ingestion Persistence )      <-- Step 4C1 & 4C2: Foundation + Ad & Observation Upsert
+   ( Ingestion Persistence )      <-- Step 4C1-4C3: Foundation + Ad/Obs/Cards Persistence
 ```
 
 1. **Provider-Specific Area (`src/ingestion/sources/meta/curious-coder/`)**:
@@ -139,8 +139,34 @@ Ad and observation persistence (`upsertAd`, `createAdObservation`, `persistObser
    - Attempting to process the same ad twice within the same ingestion run throws `DuplicateAdObservationError`.
 
 6. **Short Per-Item Atomic Transaction**:
-   - `persistObservedAd` wraps `saveRawIngestionItem`, `upsertAd`, and `createAdObservation` in an atomic transaction.
-   - If ad or observation persistence fails, the raw item in that transaction rolls back with it.
+   - `persistObservedAd` wraps `saveRawIngestionItem`, `upsertAd`, `reconcileAdCards`, and `createAdObservation` in an atomic transaction.
+   - If any step fails, the transaction rolls back atomically (including raw items and card mutations).
    - The outer ingestion run remains intact.
-   - Cards and media assets are excluded from this stage.
    - Run counters are calculated and passed to `finishIngestionRun` at the orchestration level, not inside individual item transactions.
+
+---
+
+## 6. Card Persistence & Reconciliation Rules
+
+Ad card persistence (`reconcileAdCards`) enforces snapshot reconciliation for multi-card/DCO/carousel ads:
+
+1. **Card Database Identity**:
+   - Card identity is `(ad_id, position)` with zero-indexed positions (`0, 1, 2...`).
+   - Cards represent current-snapshot state, not historical timeline entities.
+
+2. **Deterministic Reconciliation & Stale Deletion**:
+   - Incoming `SourceAd.cards` replaces the existing card set for that `ad_id`.
+   - Existing cards at matching positions are updated with current snapshot copy, URLs, and `raw_payload`.
+   - Any card rows with positions not present in the incoming snapshot are deleted.
+   - If incoming `SourceAd.cards` is empty, all card rows for that `ad_id` are deleted.
+
+3. **Null Overwrite Semantics**:
+   - Canonical `null` fields in an incoming card overwrite previous non-null values in PostgreSQL.
+
+4. **Reorder Semantics**:
+   - Card order changes update the rows at respective positions (position-based snapshot replacement).
+
+5. **Validation & Atomic Integration**:
+   - Incoming card positions are validated to be safe non-negative integers. Duplicate positions within an incoming array throw `DuplicateCardPositionError`.
+   - Card reconciliation executes inside the `persistObservedAd` per-item transaction between `upsertAd` and `createAdObservation`. If card operations fail, observation creation is aborted and the transaction rolls back.
+   - Card media candidate persistence remains deferred for subsequent pipeline steps.

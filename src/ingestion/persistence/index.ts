@@ -5,5 +5,6 @@ export * from "./source-accounts";
 export * from "./ingestion-runs";
 export * from "./raw-items";
 export * from "./ads";
+export * from "./ad-cards";
 export * from "./ad-observations";
 export * from "./observed-ads";

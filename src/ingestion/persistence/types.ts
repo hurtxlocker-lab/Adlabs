@@ -1,6 +1,6 @@
 import type { db } from "@/db/client";
 import type * as schema from "@/db/schema";
-import type { SourceAd } from "@/ingestion/types";
+import type { SourceAd, SourceAdCard } from "@/ingestion/types";
 import type { ExtractTablesWithRelations } from "drizzle-orm";
 import type { PgTransaction } from "drizzle-orm/pg-core";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -19,6 +19,7 @@ export type IngestionRunRow = typeof schema.ingestionRuns.$inferSelect;
 export type RawIngestionItemRow = typeof schema.rawIngestionItems.$inferSelect;
 export type AdRow = typeof schema.ads.$inferSelect;
 export type AdObservationRow = typeof schema.adObservations.$inferSelect;
+export type AdCardRow = typeof schema.adCards.$inferSelect;
 
 export interface EnsureBrandInput {
   name: string;
@@ -80,6 +81,16 @@ export interface AdPersistenceResult {
   outcome: "created" | "updated";
 }
 
+export interface ReconcileAdCardsInput {
+  adId: string;
+  cards: SourceAdCard[];
+}
+
+export interface ReconcileAdCardsResult {
+  cards: AdCardRow[];
+  deletedCount: number;
+}
+
 export interface CreateAdObservationInput {
   adId: string;
   ingestionRunId: string;
@@ -102,6 +113,7 @@ export interface PersistObservedAdResult {
   rawItem: RawIngestionItemRow;
   ad: AdRow;
   adOutcome: "created" | "updated";
+  cards: AdCardRow[];
   observation: AdObservationRow;
 }
 
@@ -180,5 +192,17 @@ export class DuplicateAdObservationError extends Error {
     this.name = "DuplicateAdObservationError";
     this.adId = adId;
     this.ingestionRunId = ingestionRunId;
+  }
+}
+
+export class DuplicateCardPositionError extends Error {
+  readonly adId: string;
+  readonly duplicatePosition: number;
+
+  constructor(message: string, adId: string, duplicatePosition: number) {
+    super(message);
+    this.name = "DuplicateCardPositionError";
+    this.adId = adId;
+    this.duplicatePosition = duplicatePosition;
   }
 }
