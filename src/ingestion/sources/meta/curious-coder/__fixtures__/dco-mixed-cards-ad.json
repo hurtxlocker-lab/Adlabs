@@ -1,0 +1,57 @@
+{
+  "ad_archive_id": "40495867723",
+  "ad_id": null,
+  "collation_id": "66554433",
+  "collation_count": 2,
+  "page_id": "10982347102",
+  "page_name": "Mamaearth India",
+  "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+  "publisher_platform": ["facebook", "instagram"],
+  "start_date": 1723000000,
+  "end_date": 1725000000,
+  "start_date_formatted": "2024-08-07T01:00:00.000Z",
+  "end_date_formatted": "2024-08-30T01:00:00.000Z",
+  "is_active": true,
+  "active": true,
+  "ad_library_url": "https://www.facebook.com/ads/library/?id=40495867723",
+  "snapshot": {
+    "page_id": "10982347102",
+    "page_name": "Mamaearth India",
+    "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+    "display_format": "DCO",
+    "body": "Explore our bestsellers in hair care & skincare.",
+    "title": "Bestsellers Combo",
+    "caption": "mamaearth.in",
+    "link_description": null,
+    "cta_text": "Learn More",
+    "cta_type": "LEARN_MORE",
+    "link_url": "https://mamaearth.example.test/bestsellers",
+    "videos": [],
+    "images": [],
+    "cards": [
+      {
+        "body": "Watch why 10 lakh+ customers love Rosemary Hair Growth Range.",
+        "title": "Rosemary Anti-Hair Fall Range",
+        "description": "Watch Demonstration",
+        "cta_text": "Watch More",
+        "cta_type": "WATCH_MORE",
+        "link_url": "https://mamaearth.example.test/rosemary",
+        "video_hd_url": "https://media.example.test/videos/card-video-01-hd.mp4",
+        "video_sd_url": "https://media.example.test/videos/card-video-01-sd.mp4",
+        "video_preview_image_url": "https://media.example.test/images/card-video-01-preview.jpg"
+      },
+      {
+        "body": "Hydrate deeply with Rice Water Moisture Glow.",
+        "title": "Rice Water Skin Hydration",
+        "description": "Glass Skin Routine",
+        "cta_text": "Shop Now",
+        "cta_type": "SHOP_NOW",
+        "link_url": "https://mamaearth.example.test/rice-water",
+        "original_image_url": "https://media.example.test/images/card-image-02.jpg",
+        "resized_image_url": "https://media.example.test/images/card-image-02-resized.jpg"
+      }
+    ],
+    "extra_images": [],
+    "extra_videos": []
+  }
+}

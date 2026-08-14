@@ -1,0 +1,46 @@
+{
+  "ad_archive_id": "10192837465",
+  "ad_id": null,
+  "collation_id": "88991122",
+  "collation_count": 3,
+  "page_id": "10982347102",
+  "page_name": "Mamaearth India",
+  "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+  "publisher_platform": ["facebook", "instagram", "audience_network"],
+  "start_date": 1720000000,
+  "end_date": 1722000000,
+  "start_date_formatted": "2024-07-03T09:46:40.000Z",
+  "end_date_formatted": "2024-07-26T12:00:00.000Z",
+  "is_active": true,
+  "active": true,
+  "ad_library_url": "https://www.facebook.com/ads/library/?id=10192837465",
+  "snapshot": {
+    "page_id": "10982347102",
+    "page_name": "Mamaearth India",
+    "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+    "display_format": "VIDEO",
+    "body": {
+      "markup": {
+        "__html": "Get glowing skin with Vitamin C Daily Glow Serum! Enriched with 50x Vitamin C & Turmeric."
+      },
+      "text": "Get glowing skin with Vitamin C Daily Glow Serum! Enriched with 50x Vitamin C & Turmeric."
+    },
+    "title": "Shop Now for 20% Off | Natural & Toxin-Free",
+    "caption": "mamaearth.in",
+    "link_description": "Dermatologically tested for all Indian skin types.",
+    "cta_text": "Shop Now",
+    "cta_type": "SHOP_NOW",
+    "link_url": "https://mamaearth.example.test/products/vitamin-c-serum?utm_source=meta",
+    "videos": [
+      {
+        "video_hd_url": "https://media.example.test/videos/video-001-hd.mp4",
+        "video_sd_url": "https://media.example.test/videos/video-001-sd.mp4",
+        "video_preview_image_url": "https://media.example.test/images/video-001-preview.jpg"
+      }
+    ],
+    "images": [],
+    "cards": [],
+    "extra_images": [],
+    "extra_videos": []
+  }
+}

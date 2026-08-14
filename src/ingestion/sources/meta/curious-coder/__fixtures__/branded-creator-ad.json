@@ -1,0 +1,44 @@
+{
+  "ad_archive_id": "20283746501",
+  "ad_id": null,
+  "collation_id": null,
+  "collation_count": null,
+  "page_id": "10982347102",
+  "page_name": "Mamaearth India",
+  "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+  "publisher_platform": ["instagram"],
+  "start_date": 1721000000,
+  "end_date": 1723000000,
+  "start_date_formatted": "2024-07-15T01:00:00.000Z",
+  "end_date_formatted": "2024-08-07T01:00:00.000Z",
+  "is_active": true,
+  "active": true,
+  "ad_library_url": "https://www.facebook.com/ads/library/?id=20283746501",
+  "snapshot": {
+    "page_id": "50982347199",
+    "page_name": "Pooja Beauty Secrets",
+    "page_profile_uri": "https://media.example.test/profiles/pooja-creator.jpg",
+    "branded_content_page_id": "10982347102",
+    "branded_content_page_name": "Mamaearth India",
+    "branded_content_page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+    "display_format": "VIDEO",
+    "body": "My everyday secret for glowing monsoon skin! #PaidPartnership with Mamaearth India.",
+    "title": "Use code POOJA20 for extra discount",
+    "caption": "mamaearth.in",
+    "link_description": null,
+    "cta_text": "Order Now",
+    "cta_type": "ORDER_NOW",
+    "link_url": "https://mamaearth.example.test/creator/pooja?utm_source=ig_partnership",
+    "videos": [
+      {
+        "video_hd_url": "https://media.example.test/videos/creator-002-hd.mp4",
+        "video_sd_url": "https://media.example.test/videos/creator-002-sd.mp4",
+        "video_preview_image_url": "https://media.example.test/images/creator-002-preview.jpg"
+      }
+    ],
+    "images": [],
+    "cards": [],
+    "extra_images": [],
+    "extra_videos": []
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "ad_archive_id": "30394857612",
+  "ad_id": null,
+  "collation_id": "77665544",
+  "collation_count": 5,
+  "page_id": "10982347102",
+  "page_name": "Mamaearth India",
+  "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+  "publisher_platform": ["facebook", "instagram"],
+  "start_date": 1722000000,
+  "end_date": null,
+  "start_date_formatted": "2024-07-26T12:00:00.000Z",
+  "end_date_formatted": null,
+  "is_active": true,
+  "active": true,
+  "ad_library_url": "https://www.facebook.com/ads/library/?id=30394857612",
+  "snapshot": {
+    "page_id": "10982347102",
+    "page_name": "Mamaearth India",
+    "page_profile_uri": "https://media.example.test/profiles/mamaearth.jpg",
+    "display_format": "DCO",
+    "body": "{{product.brand}} Monsoon Skincare Sale. {{product.description}}",
+    "title": "{{product.name}}",
+    "caption": "mamaearth.in",
+    "link_description": null,
+    "cta_text": "Shop Now",
+    "cta_type": "SHOP_NOW",
+    "link_url": "https://mamaearth.example.test/monsoon-sale",
+    "videos": [],
+    "images": [],
+    "cards": [
+      {
+        "body": "Daily hydration with natural Aloe Vera & Ashwagandha.",
+        "title": "Aloe Vera Gel 300ml - ₹299",
+        "description": "100% Pure Aloe Vera Gel",
+        "cta_text": "Shop Now",
+        "cta_type": "SHOP_NOW",
+        "link_url": "https://mamaearth.example.test/products/aloe-vera-gel",
+        "original_image_url": "https://media.example.test/images/card-01-aloe.jpg",
+        "resized_image_url": "https://media.example.test/images/card-01-aloe-resized.jpg"
+      },
+      {
+        "body": "Deep cleanses & brightens skin with Ubtan & Turmeric.",
+        "title": "Ubtan Face Wash 100ml - ₹249",
+        "description": "For Tan Removal & Radiant Skin",
+        "cta_text": "Shop Now",
+        "cta_type": "SHOP_NOW",
+        "link_url": "https://mamaearth.example.test/products/ubtan-face-wash",
+        "original_image_url": "https://media.example.test/images/card-02-ubtan.jpg",
+        "resized_image_url": "https://media.example.test/images/card-02-ubtan-resized.jpg"
+      },
+      {
+        "body": "Intense moisture and repair for dry hair.",
+        "title": "Onion Hair Oil 200ml - ₹399",
+        "description": "Reduces Hair Fall & Promotes Growth",
+        "cta_text": "Shop Now",
+        "cta_type": "SHOP_NOW",
+        "link_url": "https://mamaearth.example.test/products/onion-hair-oil",
+        "original_image_url": "https://media.example.test/images/card-03-onion.jpg",
+        "resized_image_url": "https://media.example.test/images/card-03-onion-resized.jpg"
+      }
+    ],
+    "extra_images": [],
+    "extra_videos": []
+  }
+}
