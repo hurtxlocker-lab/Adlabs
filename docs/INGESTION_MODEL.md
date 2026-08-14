@@ -202,3 +202,44 @@ Physical media persistence (`ensureStoredMediaAsset`, `reconcileAdMedia`, `recon
    - Incoming media sets represent the current observed snapshot; stale relationships are deleted.
    - Shared physical `media_assets` rows are **never** deleted during relationship reconciliation or ad deletion (no orphan GC in M0).
    - Deletions are strictly scoped to the specific `ad_id` or `ad_card_id`.
+
+---
+
+## 8. Secure Media Downloader & Streaming SHA-256 Rules
+
+The media downloader (`src/ingestion/media/`) retrieves remote media assets safely:
+
+1. **Untrusted External Input & Protocol Policy**:
+   - All `SourceMedia.sourceUrl` strings are treated as untrusted external inputs.
+   - Only `http:` and `https:` protocols are accepted; all other schemes (`file:`, `data:`, `blob:`, `ftp:`, etc.) and malformed URLs are rejected.
+
+2. **DNS & SSRF Protection**:
+   - Direct IP addresses and DNS-resolved addresses are validated against private, link-local, loopback, CGNAT, documentation, and multicast ranges (both IPv4 and IPv6).
+   - Local hostnames (`localhost`, `*.localhost`) are rejected.
+   - If any resolved address for a domain is private or reserved, the request fails closed.
+   - *Residual TOCTOU Limitation*: Standard Node.js fetch does not support IP pinning across DNS resolution and socket connection; pre-fetch multi-IP resolution validation provides the strongest standard defense against SSRF.
+
+3. **Redirect Validation**:
+   - Native auto-redirects are disabled (`redirect: "manual"`).
+   - A maximum of 5 redirects are allowed. Every hop re-executes full SSRF, protocol, and loop validation before issuing the next request.
+
+4. **Memory-Bounded Streaming & Hard Size Limits**:
+   - Maximum download size is capped at 100 MiB (`104,857,600` bytes).
+   - If `Content-Length` exceeds the limit or is negative, the request is rejected before reading the body.
+   - Body bytes are streamed chunk-by-chunk through a streaming SHA-256 hasher and written directly to a temporary file on disk (in `os.tmpdir()`), aborting if streamed bytes exceed the limit. No full in-memory buffering is permitted.
+
+5. **Exact-Byte SHA-256 Calculation**:
+   - SHA-256 is computed strictly over raw streamed bytes using Node `crypto.createHash("sha256")` and formatted as lowercase 64-hex.
+
+6. **Bounded Magic-Byte Sniffing & Content Validation**:
+   - The initial 512 bytes are inspected for media signatures (JPEG, PNG, GIF, WebP, MP4/ftyp, WebM) and obvious text/HTML/JSON error payloads.
+   - Text error pages and mismatched formats (e.g. video returned when image was expected) are rejected with `InvalidMediaContentError`.
+
+7. **Temporary File Lifecycle**:
+   - Temp files use randomized safe filenames in `os.tmpdir()`.
+   - Partial files from aborted/failed downloads are cleaned up immediately.
+   - The caller/storage layer owns cleanup of successful downloads via `DownloadedMedia.cleanup()`.
+
+8. **Isolation & Retries**:
+   - The downloader has zero awareness of database schemas or object storage (R2).
+   - Retries are not performed at the downloader layer (a single deterministic attempt per call).
