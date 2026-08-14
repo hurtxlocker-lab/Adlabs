@@ -84,7 +84,7 @@ function verifyHeadObjectMatch(
  *   does NOT automatically delete or clean up `downloaded.tempFilePath`.
  * - No database writes occur in this storage bridge.
  * - Same physical bytes (SHA-256) always target the exact same R2 object key regardless of
- *   mediaType (IMAGE vs VIDEO_PREVIEW) or MIME variations.
+ *   MIME variations or semantic usage.
  *
  * @param downloaded The verified downloaded media object from downloadMedia().
  * @param options Injectable overrides for testing (s3Client, bucketName).

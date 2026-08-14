@@ -59,6 +59,7 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Stored Media Persistence (Step 4C4 + 4C4.1)**: Deduplication by SHA-256, conservative media type / MIME enrichment, and ad/card relationship reconciliation (`reconcileAdMedia`, `reconcileCardMedia`).
 - **Secure Media Downloader (Step 4D1 + 4D1.1)**: HTTP/HTTPS streaming downloader with multi-address DNS SSRF checks, private IP blocking, manual redirect verification (max 5), single 60s operation-wide deadline, 100 MiB limit, magic-byte sniffing, streaming SHA-256 calculation, and memory-bounded temporary file management.
 - **Cloudflare R2 Object Storage Adapter (Step 4D2 + 4D2.1 + 4D2.2)**: S3-compatible R2 storage adapter (`src/storage/`), true SHA-addressed deterministic storage keys (`media/sha256/<sha256>`), existence check via `HeadObject`, streaming upload via `PutObject`, post-upload verification, and `StoredMediaInput` output without leaking signed URLs or persisting public base URLs as canonical identity. Live-verified against DEV bucket via dedicated `pnpm test:r2` covering PUT, HEAD, metadata, exact-key deletion, and cleanup.
+- **Media Orchestration (Step 4D3)**: Two-phase decoupled orchestration (`src/ingestion/media-orchestration/`). Phase A (`prepareAdMedia`) performs external download, SHA-256 calculation, and R2 storage with bounded concurrency (3), temp file cleanup, and in-memory memoization without holding any DB connection. Phase B (`persistPreparedAdMedia`) reconciles direct and card media relationships atomically in a short database transaction with zero network calls.
 - **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`), database integration tests (`pnpm test:db`), and live R2 smoke test (`pnpm test:r2`).
 
 ---
@@ -127,6 +128,7 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Streaming & Memory Safety**: Streams directly to temporary files in `os.tmpdir()` while computing streaming SHA-256 hash. Zero unbounded in-memory buffering.
 - **Magic-Byte Sniffing**: Inspects initial 512 bytes for binary signatures (JPEG, PNG, GIF, WebP, MP4/ftyp, WebM) and rejects HTML/JSON/text error payloads.
 - **Temporary File Ownership**: Caller/storage layer owns cleanup via `DownloadedMedia.cleanup()`; failed downloads unlink partial files immediately.
+- **Physical vs Semantic Media Typing**: SHA-256 identifies exact physical bytes. `media_assets.media_type` reflects physical byte class (`IMAGE`, `VIDEO`, `UNKNOWN`), while semantic usage (such as `video_preview` or poster frames) lives exclusively in relationship metadata (`ad_media.role` / `card_media.role`).
 - **Stored Media Deduping**: `ensureStoredMediaAsset` uses `INSERT ... ON CONFLICT (sha256) DO NOTHING`. First observed `source_url` is preserved.
 - **Shared Assets**: Shared physical media across multiple ads references a single `media_assets` row; relationships are updated while physical rows are never deleted.
 - **R2 Storage Bridge**: Content-addressed keys derived strictly from SHA-256 (`media/sha256/<sha256>`), `HeadObject` existence verification, `PutObject` with SHA-256 metadata, and post-upload verification.
@@ -178,9 +180,9 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 ---
 
 ## Immediate Next Step
-**Step 4D3 — Full Ingestion Pipeline & Media Reconciliation Orchestration**
-- **Objective**: Combine raw preservation, normalization, ad persistence, card reconciliation, observation recording, secure media download, R2 object storage, and media relationship reconciliation into the end-to-end ingestion pipeline.
-- **Scope**: Wire `storeDownloadedMedia` and `reconcileAdMedia`/`reconcileCardMedia` with robust error isolation per media item and per ad item.
+**Step 4E — End-to-End Ingestion Pipeline & Single-Item Atomic Unification**
+- **Objective**: Close the temporary consistency gap by combining Phase A external media preparation with a single unified atomic database transaction (raw item $\rightarrow$ ad upsert $\rightarrow$ card reconciliation $\rightarrow$ media assets & relationships $\rightarrow$ observation recording), followed by run-level orchestration over full provider batches.
+- **Scope**: Unified single-item ingestion function, run counters accumulation, and failure isolation per item.
 
 ---
 

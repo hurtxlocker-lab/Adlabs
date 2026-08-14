@@ -95,7 +95,6 @@ export function validateSha256(value: unknown, fieldName: string): string {
 const VALID_MEDIA_TYPES = new Set<StoredMediaType>([
   "IMAGE",
   "VIDEO",
-  "VIDEO_PREVIEW",
   "UNKNOWN",
 ]);
 
@@ -105,7 +104,7 @@ export function validateStoredMediaType(
 ): StoredMediaType {
   if (typeof value !== "string" || !VALID_MEDIA_TYPES.has(value as StoredMediaType)) {
     throw new Error(
-      `Field "${fieldName}" must be one of "IMAGE", "VIDEO", "VIDEO_PREVIEW", "UNKNOWN", received: "${value}"`,
+      `Field "${fieldName}" must be one of "IMAGE", "VIDEO", "UNKNOWN", received: "${value}"`,
     );
   }
   return value as StoredMediaType;

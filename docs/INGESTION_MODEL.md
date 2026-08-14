@@ -279,3 +279,81 @@ The object storage adapter (`src/storage/`) manages content-addressed media pers
    - No database writes occur within the storage adapter.
    - Semantic `mediaType`, raw source URLs, signed query parameters, and access credentials are never stored in R2 object metadata.
 
+---
+
+## 10. Two-Phase Media Orchestration Architecture (Step 4D3)
+
+Media processing connects source media locators to content-addressed object storage and relational database reconciliation via an explicit two-phase decoupled architecture:
+
+```
+[ PHASE A: External I/O (No DB Tx) ]
+SourceAd (directMedia + card media)
+       ↓
+downloadMedia (streaming SHA-256 + SSRF checks)
+       ↓
+storeDownloadedMedia (Cloudflare R2 HeadObject / PutObject)
+       ↓
+PreparedAdMedia (StoredMediaInput + deterministic positions)
+
+[ PHASE B: Atomic Database Reconciliation (No Network) ]
+PreparedAdMedia + adId
+       ↓ (Short DB Transaction)
+reconcileAdMedia (direct ad relationships)
+       ↓
+reconcileCardMedia (card relationships matched by (ad_id, position))
+       ↓
+Commit / Rollback
+```
+
+### Phase A: Media Preparation (`prepareAdMedia`)
+1. **Network & I/O Boundary**: Executes external HTTP downloads and Cloudflare R2 object storage calls. Absolutely **no database connection or transaction** is opened or held during Phase A.
+2. **Deterministic Position Ordering**:
+   - Direct ad media positions: `0, 1, 2, ...` matching the canonical order of `SourceAd.directMedia`.
+   - Card media positions: `0, 1, 2, ...` matching the canonical order of `SourceAdCard.media` within each card.
+3. **Bounded Concurrency & In-Memory Memoization**:
+   - Media downloads within an ad run with a bounded concurrency pool (default: 3).
+   - In-memory memoization per `prepareAdMedia` invocation avoids redundant downloads if the exact same `(type, sourceUrl)` is referenced across multiple cards or direct media, while ensuring relationship descriptors are generated for every target position.
+4. **Guaranteed Temp-File Lifecycle**:
+   - `downloaded.cleanup()` is guaranteed to execute in a `finally` block for every downloaded media item on both success and failure paths. Zero temporary files are leaked.
+5. **Conservative All-or-Nothing Failure & R2 Object Survival**:
+   - If any media item fails to download, hash, validate, or store, `prepareAdMedia` rejects completely.
+   - Any R2 objects already uploaded prior to a subsequent failure are **not** deleted or compensated; because R2 objects are content-addressed by SHA-256 and globally reusable, they remain safely available for subsequent ingestion runs.
+
+### Phase B: Database Media Persistence (`persistPreparedAdMedia`)
+1. **Zero Network Calls**: Pure database operation executing in a short, atomic transaction.
+2. **Ad & Card Resolution**:
+   - Verifies target `adId` exists in `ads`.
+   - Resolves card entities strictly by `(ad_id, position)` from `ad_cards`.
+   - Throws `PreparedCardNotFoundError` if a prepared card position is missing in the database.
+3. **Snapshot Reconciliation Semantics**:
+   - Reconciles direct ad media via `reconcileAdMedia`. An empty `prepared.directMedia` array deletes stale `ad_media` rows for that ad.
+   - Reconciles card media via `reconcileCardMedia`. Cards with empty media or omitted from `prepared.cardMedia` have their stale `card_media` relationships cleared.
+   - Shared physical `media_assets` rows are **never** deleted during reconciliation.
+4. **Transaction Atomicity**:
+   - If direct media reconciliation succeeds but a subsequent card media reconciliation fails, the entire transaction rolls back, restoring prior relationship state and removing any `media_assets` rows inserted during that transaction.
+
+### Temporary Consistency Gap & Step 4E Recommendation
+- **Current Separation**: Currently, `persistObservedAd` commits ad/card/observation records in its own transaction, and `persistPreparedAdMedia` reconciles media relationships in a separate subsequent transaction. If media persistence fails, an ad can temporarily exist in the database without its media relationships.
+- **Recommended Unification (Step 4E)**: In the upcoming end-to-end single-item ingestion pipeline, the architecture will execute Phase A (`prepareAdMedia`) first outside any DB transaction, followed by a **single unified atomic DB transaction** that persists the raw item, upserts the ad, reconciles cards, ensures media assets, reconciles ad/card media, and records the observation together.
+
+---
+
+## 11. Separation of Physical Media Type from Semantic Usage (Step 4D3.1)
+
+To strictly enforce that SHA-256 identifies exact physical bytes, media typing is partitioned into two distinct concepts:
+
+1. **Source Semantic Media Type (`SourceMedia.type` / `SourceExpectedMediaType`)**:
+   - `image | video | video_preview | unknown`
+   - Expresses upstream provider intent. `video_preview` signifies that a source locator provides image bytes intended as a video preview or poster frame.
+
+2. **Physical Media Asset Type (`media_assets.media_type` / `PhysicalMediaType` / `StoredMediaType`)**:
+   - `IMAGE | VIDEO | UNKNOWN`
+   - Represents the verified physical byte class on disk and object storage.
+   - `VIDEO_PREVIEW` is **not** a physical media type; video preview candidates containing valid image bytes are classified as physical `IMAGE`.
+
+3. **Semantic Usage & Relationship Metadata**:
+   - Usage context (e.g. `primary`, `preview`, `extra`) lives exclusively on relationship metadata (`ad_media.role` and `card_media.role`).
+   - If the same physical JPEG is used as an ad image in one place and as a video preview in another, both resolve to the exact same SHA-256 and physical `media_assets` row (`media_type = 'IMAGE'`) without triggering a `MediaAssetConflictError`.
+
+
+

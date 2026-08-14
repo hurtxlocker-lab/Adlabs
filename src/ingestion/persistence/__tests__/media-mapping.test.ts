@@ -72,10 +72,10 @@ describe("Stored Media Mapping & Validation Invariants", () => {
   it("validates stored media types strictly", () => {
     expect(validateStoredMediaType("IMAGE", "mediaType")).toBe("IMAGE");
     expect(validateStoredMediaType("VIDEO", "mediaType")).toBe("VIDEO");
-    expect(validateStoredMediaType("VIDEO_PREVIEW", "mediaType")).toBe(
-      "VIDEO_PREVIEW",
-    );
     expect(validateStoredMediaType("UNKNOWN", "mediaType")).toBe("UNKNOWN");
+    expect(() => validateStoredMediaType("VIDEO_PREVIEW", "mediaType")).toThrow(
+      /must be one of/,
+    );
     expect(() => validateStoredMediaType("AUDIO", "mediaType")).toThrow(
       /must be one of/,
     );

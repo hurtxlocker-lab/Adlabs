@@ -167,7 +167,7 @@ describe("Media Downloader Unit & Integration Tests", () => {
     expect(fs.existsSync(result.tempFilePath)).toBe(false);
   });
 
-  it("3. downloads preview candidate with valid image -> VIDEO_PREVIEW", async () => {
+  it("3. downloads preview candidate with valid image -> physical IMAGE", async () => {
     const testUrl = "https://cdn.example.com/previews/thumb.jpg";
     const mockFetch = createMockFetch({
       [testUrl]: {
@@ -182,7 +182,7 @@ describe("Media Downloader Unit & Integration Tests", () => {
       { ...defaultTestOpts, fetchImpl: mockFetch },
     );
 
-    expect(result.mediaType).toBe("VIDEO_PREVIEW");
+    expect(result.mediaType).toBe("IMAGE");
     expect(result.sha256).toBe(expectedJpegSha);
 
     await result.cleanup();

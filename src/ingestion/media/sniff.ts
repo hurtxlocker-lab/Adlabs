@@ -158,7 +158,7 @@ export function validateMediaContent(
         rawMime,
       );
     }
-    return { mediaType: "VIDEO_PREVIEW", mimeType: rawMime };
+    return { mediaType: "IMAGE", mimeType: rawMime };
   }
 
   if (expectedType === "image") {

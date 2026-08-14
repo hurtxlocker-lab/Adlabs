@@ -173,10 +173,10 @@ describe("R2 Storage Bridge Unit Tests (Mock S3 — True SHA-Addressed Identity)
     });
   });
 
-  it("2. same SHA as VIDEO_PREVIEW targets the exact same storage key media/sha256/<sha>", async () => {
+  it("2. image downloaded from preview candidate targets exact same storage key media/sha256/<sha>", async () => {
     const previewDownloaded: DownloadedMedia = {
       ...downloaded,
-      mediaType: "VIDEO_PREVIEW",
+      mediaType: "IMAGE",
     };
 
     const { client, headCalls, putCalls } = createMockS3Client({
@@ -193,7 +193,7 @@ describe("R2 Storage Bridge Unit Tests (Mock S3 — True SHA-Addressed Identity)
 
     expect(headCalls[0].input.Key).toBe(`media/sha256/${sampleSha}`);
     expect(result.storageKey).toBe(`media/sha256/${sampleSha}`);
-    expect(result.mediaType).toBe("VIDEO_PREVIEW");
+    expect(result.mediaType).toBe("IMAGE");
     expect(putCalls.length).toBe(0);
   });
 

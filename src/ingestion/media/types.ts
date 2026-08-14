@@ -7,7 +7,6 @@ export type SourceExpectedMediaType =
 export type DownloadedMediaType =
   | "IMAGE"
   | "VIDEO"
-  | "VIDEO_PREVIEW"
   | "UNKNOWN";
 
 export interface DownloadMediaInput {

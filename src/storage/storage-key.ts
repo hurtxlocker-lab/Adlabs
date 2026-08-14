@@ -7,7 +7,7 @@ const SHA256_HEX_REGEX = /^[0-9a-f]{64}$/;
  *
  * Physical Invariant:
  * The R2 object key is derived SOLELY from the canonical SHA-256 hash of downloaded bytes.
- * It does not depend on semantic mediaType (IMAGE, VIDEO, VIDEO_PREVIEW), MIME type,
+ * It does not depend on semantic mediaType (IMAGE, VIDEO, UNKNOWN), MIME type,
  * file extensions, brand, ad ID, or source URLs.
  *
  * Pattern: `media/sha256/<sha256>`

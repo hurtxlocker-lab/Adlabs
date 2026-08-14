@@ -1369,7 +1369,7 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
 
     const previewRef: StoredMediaRef = {
       media: {
-        mediaType: "VIDEO_PREVIEW",
+        mediaType: "IMAGE",
         sourceUrl: "https://meta.cdn/p1.jpg",
         sha256: shaPreview1,
         mimeType: "image/jpeg",
@@ -1602,7 +1602,7 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
 
     const refB: StoredMediaRef = {
       media: {
-        mediaType: "VIDEO_PREVIEW",
+        mediaType: "IMAGE",
         sha256: shaPreview1,
         byteSize: BigInt(51200),
         storageProvider: "r2",

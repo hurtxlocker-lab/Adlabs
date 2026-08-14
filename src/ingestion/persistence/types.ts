@@ -124,11 +124,12 @@ export interface PersistObservedAdResult {
 // Stored Media Types & Inputs
 // -----------------------------------------------------------------------------
 
-export type StoredMediaType =
+export type PhysicalMediaType =
   | "IMAGE"
   | "VIDEO"
-  | "VIDEO_PREVIEW"
   | "UNKNOWN";
+
+export type StoredMediaType = PhysicalMediaType;
 
 export interface StoredMediaInput {
   mediaType: StoredMediaType;
