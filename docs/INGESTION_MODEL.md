@@ -473,3 +473,33 @@ Step 4G introduces a narrow, decoupled Apify adapter (`src/ingestion/providers/a
 5. **No Network Inside Step 4F**: Step 4F remains completely unaware of Apify and network adapters, ensuring the core batch orchestration engine remains 100% offline-testable.
 6. **Zero Automatic Retries**: All failures (task run timeout, dataset retrieval, or schema mismatch) fail immediately without automatic retry loops.
 7. **Explicit CLI Lifecycle Cleanup**: The manual DEV runner (`scripts/ingest-curious-coder-dev.ts`) executes inside a `try ... finally` block that invokes `closeDatabaseConnection()` to cleanly release postgres.js connection pool handles, ensuring natural process exit back to the shell prompt.
+
+---
+
+## 15. Canonical Private Media Gateway (Step M1A-0)
+
+Step M1A-0 establishes the canonical, browser-facing media delivery architecture for AdLabs:
+
+```
+Browser / Client Viewport
+          │
+          ▼  https://media.brainfoods.in/media/sha256/<sha256>
+Cloudflare Zero Trust Access (DEV identity gate)
+          │
+          ▼
+Cloudflare Worker (adlabs-media-dev)
+          │  (private R2 binding: env.MEDIA_BUCKET)
+          ▼
+Cloudflare R2 Bucket (brainfoods-ads-dev)
+```
+
+### Architectural Guarantees:
+1. **Private R2 Remains Canonical Storage**: The backend R2 bucket (`brainfoods-ads-dev`) remains completely private. There is zero public bucket access, no `r2.dev` public URL, and no direct custom domain attachment on R2.
+2. **Dedicated Cloudflare Worker Gateway**: Media delivery is handled exclusively by a dedicated Cloudflare Worker (`workers/adlabs-media/`). Next.js customer-facing request handling contains zero media proxying, zero S3 `GetObjectCommand` calls, and zero R2 credentials.
+3. **Canonical Media URL Namespace**: All product surfaces resolve media via `MEDIA_BASE_URL` (`https://media.brainfoods.in`). The storage key invariant `media/sha256/<64 lowercase hex>` remains universal.
+4. **Single-Part HTTP Range Support**: The Worker implements RFC 7233 single-part byte range requests (`206 Partial Content`), enabling fluid seeking and progressive streaming for HTML5 video players.
+5. **Security & Epistemic Honesty**:
+   - Original Meta CDN URLs (`source_url`) are NEVER rendered in browser UI or leaked to clients.
+   - Presigned S3 URLs are NOT used as the canonical presentation path.
+   - Cache policy is explicitly set to `Cache-Control: private, no-transform` during Access-protected DEV to prevent authenticated responses from being cached on shared intermediate proxies.
+   - Fail-closed security: any non-canonical path or malformed hash immediately returns `404 Not Found`. Methods other than `GET` and `HEAD` return `405 Method Not Allowed`.

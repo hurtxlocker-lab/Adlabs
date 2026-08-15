@@ -26,23 +26,3 @@ export function getDeterministicStorageKey(sha256: string): string {
 
   return `media/sha256/${normalizedSha}`;
 }
-
-/**
- * Derives an optional public URL for presentation given a storage key and public base URL.
- *
- * Note: Public URLs are configuration-derived and must NEVER be stored in the database
- * as canonical persistent media identity.
- */
-export function getPublicMediaUrl(
-  storageKey: string,
-  publicBaseUrl?: string | null,
-): string | null {
-  if (!publicBaseUrl || publicBaseUrl.trim() === "") {
-    return null;
-  }
-
-  const cleanBase = publicBaseUrl.trim().replace(/\/+$/, "");
-  const cleanKey = storageKey.replace(/^\/+/, "");
-
-  return `${cleanBase}/${cleanKey}`;
-}

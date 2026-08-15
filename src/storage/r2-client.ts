@@ -34,7 +34,6 @@ export function getValidatedR2Config() {
     accessKeyId: accessKeyId.trim(),
     secretAccessKey: secretAccessKey.trim(),
     bucketName: bucketName.trim(),
-    publicBaseUrl: env.R2_PUBLIC_BASE_URL?.trim() || null,
   };
 }
 

@@ -61,3 +61,10 @@ export class MissingR2ConfigError extends ObjectStorageError {
     this.missingVar = missingVar;
   }
 }
+
+export class MediaUrlResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MediaUrlResolutionError";
+  }
+}

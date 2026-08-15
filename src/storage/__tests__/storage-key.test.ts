@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ObjectStorageError } from "../errors";
-import { getDeterministicStorageKey, getPublicMediaUrl } from "../storage-key";
+import { getDeterministicStorageKey } from "../storage-key";
 
 describe("Storage Key Pure Tests (True SHA-Addressed Object Identity)", () => {
   const sampleSha =
@@ -57,22 +57,5 @@ describe("Storage Key Pure Tests (True SHA-Addressed Object Identity)", () => {
         "../8bac4800c6273bccf86e4e4275c1553fd58821a0a0dc19f595c95ff599374f59",
       ),
     ).toThrow(ObjectStorageError);
-  });
-
-  it("5. public URL helper cleanly joins base URL and extensionless storage key", () => {
-    const key = `media/sha256/${sampleSha}`;
-    expect(getPublicMediaUrl(key, "https://cdn.adlabs.example.com")).toBe(
-      `https://cdn.adlabs.example.com/media/sha256/${sampleSha}`,
-    );
-
-    // Handles trailing slash on base URL
-    expect(getPublicMediaUrl(key, "https://cdn.adlabs.example.com/")).toBe(
-      `https://cdn.adlabs.example.com/media/sha256/${sampleSha}`,
-    );
-
-    // Returns null if base URL is missing or empty
-    expect(getPublicMediaUrl(key, null)).toBeNull();
-    expect(getPublicMediaUrl(key, undefined)).toBeNull();
-    expect(getPublicMediaUrl(key, "   ")).toBeNull();
   });
 });

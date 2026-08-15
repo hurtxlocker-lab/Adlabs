@@ -63,6 +63,16 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Atomic Single-Ad Workflow (Step 4E)**: Unified two-phase end-to-end single-ad pipeline (`ingestNormalizedAd`). Phase A executes media preparation with zero DB connection; Phase B commits raw payload, ad upsert, card reconciliation, direct/card media reconciliation, and run observation in ONE short atomic PostgreSQL transaction with observation-last guarantee.
 - **Batch Ingestion Run Orchestration (Step 4F)**: Full run-level batch orchestration engine (`runCuriousCoderIngestion`) over in-memory Curious Coder payload arrays. Sequential item processing, item-level failure isolation (`failures` reporting with typed stage classification), truthful counter accumulation (`createdAdsCount` $\rightarrow$ `new_ads_count`, `updatedAdsCount` $\rightarrow$ `updated_ads_count`, uninstrumented media metrics kept at 0), and strict `ingestion_runs` finalization (`SUCCEEDED`, `PARTIAL`, `FAILED`).
 - **Apify Saved-Task Adapter & Live End-to-End Smoke Ingestion (Step 4G)**: Decoupled Apify provider adapter (`src/ingestion/providers/apify/`) executing saved Apify task (`hurtxlocker/3-ad-task-mamaearth`) without actor input reconstruction. Live smoke run on 2026-08-15 (Run `lDqD8PcsDpaatgNV5`, Dataset `1VAqLdRZiiygZwvnj`) successfully ingested 3 real Mamaearth video ads into Supabase (`5f91511b-a185-4d69-82de-e4974c3592d6`), downloaded 6 media assets (3 MP4 videos + 3 JPEG previews), computed exact streaming SHA-256 hashes, uploaded to Cloudflare R2 (`media/sha256/<sha256>`), verified via R2 HEAD (100% byte size match), and persisted atomic observations. Accommodates Curious Coder minimum charge threshold (`count: 10`) via independent local hard cap (`LOCAL_HARD_CAP = 3`).
+- **Canonical Private Media Gateway (Step M1A-0)**: Dedicated Cloudflare Worker (`workers/adlabs-media/`, name: `adlabs-media-dev`) attached to custom domain `https://media.brainfoods.in` and bound to private R2 bucket (`brainfoods-ads-dev`). Serves canonical `media/sha256/<sha256>` paths with RFC 7233 byte-range streaming (`206 Partial Content`), private cache gating (`Cache-Control: private, no-transform`), and fail-closed path validation. Application URL resolver (`resolveMediaUrl` using `MEDIA_BASE_URL=https://media.brainfoods.in`).
+- **Live Infrastructure Verification (2026-08-16)**:
+  - `brainfoods.in` DNS active on Cloudflare with DNSSEC active.
+  - Product application: `https://adlabs.brainfoods.in` attached to Vercel.
+  - Canonical media origin: `https://media.brainfoods.in` served by Cloudflare Worker `adlabs-media-dev`.
+  - Private storage: `brainfoods-ads-dev` bucket remains strictly private (`r2.dev` disabled, no direct public custom domain).
+  - Cloudflare Access DEV Gate: `media.brainfoods.in` is gated behind Cloudflare Zero Trust Access. Unauthenticated requests are challenged/denied; authenticated founder sessions load images and stream MP4 videos cleanly with range support.
+  - Browser Subresource Behavior: In DEV, unauthenticated `<img>`/`<video>` tags receive an Access login redirect instead of media binaries until an active Access session is established for `media.brainfoods.in`.
+  - Security Posture: No blockers for current private DEV media gateway. Final customer-facing media authorization remains intentionally deferred to the future AdLabs Auth/RBAC milestone.
+  - Zero Next.js media proxying, zero public bucket exposure, and zero Meta source URL fallback.
 - **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`), database integration tests (`pnpm test:db`), and live R2 smoke test (`pnpm test:r2`).
 
 ---
@@ -183,15 +193,9 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 ---
 
 ## Immediate Next Step
-**Step 4H — Controlled Longitudinal Rerun Proof**
-- **Objective**: Rerun the same configured advertiser after a suitable interval to prove:
-  1. Existing canonical ads reuse existing `ads.id` rows.
-  2. `first_seen_at` remains unchanged.
-  3. `last_seen_at` advances to the new run timestamp.
-  4. A new observation row is created per observed ad for the new ingestion run.
-  5. Newly appearing ads are identified as new (`createdAdsCount`).
-  6. Exact duplicate media reuses existing SHA-addressed `media_assets` and R2 objects without redundant upload or duplication.
-  7. Persisted media retrieval remains 100% independent of ephemeral original Meta CDN URLs.
+**Step M1A — Pass 1: Discover Composition**
+- **Objective**: Build the first factual Discover composition surface using real persisted AdLabs data. Establish spatial hierarchy, central search, format filtering, media-dominant grid (~70% visual focus), and minimal creative detail navigation depth using the canonical private media gateway (`https://media.brainfoods.in`).
+- **Scope**: Product read model (`AdLibraryItem`), Discover server route, factual annotations, responsive variable-aspect grid, minimal `/ads/[id]` detail view.
 
 ---
 

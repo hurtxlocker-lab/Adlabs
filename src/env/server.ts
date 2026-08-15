@@ -75,9 +75,19 @@ const serverEnvSchema = z.object({
   R2_BUCKET_NAME: z.string().min(1).optional(),
 
   /**
-   * Optional Cloudflare R2 Public Base URL for presentation/linking.
+   * Canonical media gateway base URL for browser media delivery.
+   * Example: "https://media.brainfoods.in"
    */
-  R2_PUBLIC_BASE_URL: z.string().url().optional().or(z.literal("")).optional(),
+  MEDIA_BASE_URL: z
+    .string()
+    .url("MEDIA_BASE_URL must be a valid URL")
+    .refine(
+      (val) => val.startsWith("https://"),
+      "MEDIA_BASE_URL must be an HTTPS URL",
+    )
+    .optional()
+    .or(z.literal(""))
+    .optional(),
 
   /**
    * Apify API token for executing saved tasks.
