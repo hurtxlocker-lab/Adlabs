@@ -1,6 +1,14 @@
 import "server-only";
 import { db } from "@/db/client";
-import { ads, brands, sourceAccounts, adMedia, mediaAssets } from "@/db/schema";
+import {
+  ads,
+  brands,
+  sourceAccounts,
+  adMedia,
+  adCards,
+  cardMedia,
+  mediaAssets,
+} from "@/db/schema";
 import { resolveMediaUrl } from "@/storage";
 import { eq, inArray, desc, and, or, ilike } from "drizzle-orm";
 import type {
@@ -31,7 +39,7 @@ export async function getAdLibraryItems(
     );
   }
 
-  // Factual format filter (VIDEO, IMAGE, etc.)
+  // Factual format filter (VIDEO, IMAGE, DCO, etc.)
   if (params?.format && params.format.trim() !== "") {
     const fmt = params.format.trim().toUpperCase();
     conditions.push(eq(ads.displayFormat, fmt));
@@ -79,7 +87,9 @@ export async function getAdLibraryItems(
 
   const adRows =
     conditions.length > 0
-      ? await query.where(and(...conditions)).orderBy(desc(ads.firstSeenAt), desc(ads.createdAt))
+      ? await query
+          .where(and(...conditions))
+          .orderBy(desc(ads.firstSeenAt), desc(ads.createdAt))
       : await query.orderBy(desc(ads.firstSeenAt), desc(ads.createdAt));
 
   if (adRows.length === 0) {
@@ -88,7 +98,7 @@ export async function getAdLibraryItems(
 
   const adIds = adRows.map((r) => r.id);
 
-  // 2. Fetch associated media assets via ad_media join
+  // 2. Fetch associated direct media assets via ad_media join
   const mediaRows = await db
     .select({
       adId: adMedia.adId,
@@ -104,6 +114,23 @@ export async function getAdLibraryItems(
     .where(inArray(adMedia.adId, adIds))
     .orderBy(adMedia.position);
 
+  // Fetch associated card media assets for DCO / carousel ads
+  const cardMediaRows = await db
+    .select({
+      adId: adCards.adId,
+      mediaAssetId: mediaAssets.id,
+      mediaType: mediaAssets.mediaType,
+      role: cardMedia.role,
+      position: cardMedia.position,
+      storageKey: mediaAssets.storageKey,
+      mimeType: mediaAssets.mimeType,
+    })
+    .from(cardMedia)
+    .innerJoin(adCards, eq(cardMedia.adCardId, adCards.id))
+    .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
+    .where(inArray(adCards.adId, adIds))
+    .orderBy(adCards.position, cardMedia.position);
+
   // Group media by adId
   const mediaByAdId = new Map<string, AdLibraryMediaItem[]>();
 
@@ -114,7 +141,6 @@ export async function getAdLibraryItems(
     try {
       mediaUrl = resolveMediaUrl(m.storageKey);
     } catch {
-      // Safely skip any legacy non-canonical media keys
       continue;
     }
 
@@ -130,6 +156,34 @@ export async function getAdLibraryItems(
     const list = mediaByAdId.get(m.adId) ?? [];
     list.push(mediaItem);
     mediaByAdId.set(m.adId, list);
+  }
+
+  // Add card media if direct media is not already present or as supplemental media
+  for (const cm of cardMediaRows) {
+    if (!cm.storageKey) continue;
+
+    let mediaUrl: string;
+    try {
+      mediaUrl = resolveMediaUrl(cm.storageKey);
+    } catch {
+      continue;
+    }
+
+    const mediaItem: AdLibraryMediaItem = {
+      id: cm.mediaAssetId,
+      mediaType: (cm.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
+      role: cm.role ?? "card",
+      position: cm.position,
+      mimeType: cm.mimeType,
+      mediaUrl,
+    };
+
+    const list = mediaByAdId.get(cm.adId) ?? [];
+    // Avoid duplicate media asset IDs
+    if (!list.some((existing) => existing.id === cm.mediaAssetId)) {
+      list.push(mediaItem);
+      mediaByAdId.set(cm.adId, list);
+    }
   }
 
   // 3. Assemble AdLibraryItem records (only returning items with resolved media)
@@ -206,6 +260,7 @@ export async function getAdLibraryItemById(
 
   const row = adRows[0];
 
+  // Direct media
   const mediaRows = await db
     .select({
       mediaAssetId: mediaAssets.id,
@@ -220,11 +275,30 @@ export async function getAdLibraryItemById(
     .where(eq(adMedia.adId, id))
     .orderBy(adMedia.position);
 
+  // Card media
+  const cardMediaRows = await db
+    .select({
+      mediaAssetId: mediaAssets.id,
+      mediaType: mediaAssets.mediaType,
+      role: cardMedia.role,
+      position: cardMedia.position,
+      storageKey: mediaAssets.storageKey,
+      mimeType: mediaAssets.mimeType,
+    })
+    .from(cardMedia)
+    .innerJoin(adCards, eq(cardMedia.adCardId, adCards.id))
+    .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
+    .where(eq(adCards.adId, id))
+    .orderBy(adCards.position, cardMedia.position);
+
   const media: AdLibraryMediaItem[] = [];
+  const seenAssetIds = new Set<string>();
+
   for (const m of mediaRows) {
     if (!m.storageKey) continue;
     try {
       const mediaUrl = resolveMediaUrl(m.storageKey);
+      seenAssetIds.add(m.mediaAssetId);
       media.push({
         id: m.mediaAssetId,
         mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
@@ -234,7 +308,24 @@ export async function getAdLibraryItemById(
         mediaUrl,
       });
     } catch {
-      // Safely skip legacy non-canonical storage keys
+      continue;
+    }
+  }
+
+  for (const cm of cardMediaRows) {
+    if (!cm.storageKey || seenAssetIds.has(cm.mediaAssetId)) continue;
+    try {
+      const mediaUrl = resolveMediaUrl(cm.storageKey);
+      seenAssetIds.add(cm.mediaAssetId);
+      media.push({
+        id: cm.mediaAssetId,
+        mediaType: (cm.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
+        role: cm.role ?? "card",
+        position: cm.position,
+        mimeType: cm.mimeType,
+        mediaUrl,
+      });
+    } catch {
       continue;
     }
   }
