@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { AdLibraryItem } from "../../ad-library/types";
-import { formatFactualDate, getPrimaryMedia } from "../../ad-library/utils";
+import {
+  formatDisplayFormat,
+  formatFactualDate,
+  getPrimaryMedia,
+} from "../../ad-library/utils";
 
 interface CreativeCardProps {
   item: AdLibraryItem;
@@ -19,6 +23,10 @@ export function CreativeCard({
 
   const isVideo = item.displayFormat === "VIDEO" || video !== undefined;
   const isLead = layoutRole === "lead";
+  const formattedFormat = formatDisplayFormat(
+    item.displayFormat,
+    item.cards.length,
+  );
 
   return (
     <article className="group flex flex-col transition-all duration-200">
@@ -60,7 +68,7 @@ export function CreativeCard({
                   </div>
                 )}
 
-                {/* Subtle Cultural Play Trigger */}
+                {/* Play Trigger */}
                 <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover/player:bg-black/0 transition-colors">
                   <div className="w-12 h-12 rounded-full bg-[#07080a]/90 border border-white/20 flex items-center justify-center shadow-lg group-hover/player:scale-105 group-hover/player:border-[#d46b38] transition-all">
                     <svg
@@ -117,7 +125,7 @@ export function CreativeCard({
           </div>
 
           <span className="font-mono text-xs text-[#8e95a2] uppercase">
-            {item.displayFormat || "Video"}
+            {formattedFormat}
           </span>
         </div>
 

@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { resolveMediaUrl } from "@/storage";
 import type { AdLibraryItem } from "../types";
-import { formatFactualDate, getPrimaryMedia, matchesFactualSearch } from "../utils";
+import {
+  formatDisplayFormat,
+  formatFactualDate,
+  getPrimaryMedia,
+  isTemplateExpression,
+  matchesFactualSearch,
+  sanitizeDisplayCopy,
+} from "../utils";
 
 describe("Ad Library Read Model & Pure Logic Tests", () => {
   const sampleMediaKey =
@@ -51,6 +58,92 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
         mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
       },
     ],
+    cards: [],
+  };
+
+  const sampleDcoAd: AdLibraryItem = {
+    id: "ade858ad-5e42-43a8-b422-97dc7e615d30",
+    source: "meta",
+    sourceAdId: "1841121180105853",
+    brand: {
+      id: "39147625-7640-4230-8000-000000000000",
+      name: "The Souled Store",
+      slug: "the-souled-store",
+    },
+    displayFormat: "DCO",
+    // Concrete resolved text from card fallback (since ad-level raw was {{product.name}} and {{product.brand}})
+    headline: "Pop Culture Has a New Home!",
+    primaryText:
+      "Punjab, your ultimate fandom destination is finally here! Come say hi!",
+    description: null,
+    ctaText: "Shop Now",
+    ctaType: "SHOP_NOW",
+    destinationUrl: "https://www.thesouledstore.com/stores-near-me",
+    publisherPlatforms: ["facebook", "instagram"],
+    isActiveObserved: true,
+    firstSeenAt: new Date("2026-08-15T00:00:00.000Z"),
+    lastSeenAt: new Date("2026-08-15T00:00:00.000Z"),
+    adLibraryUrl: "https://www.facebook.com/ads/library/?id=1841121180105853",
+    media: [
+      {
+        id: "media-dco-1",
+        mediaType: "VIDEO",
+        role: "primary",
+        position: 0,
+        mimeType: "video/mp4",
+        mediaUrl: resolveMediaUrl(sampleMediaKey, baseUrl),
+      },
+      {
+        id: "media-dco-2",
+        mediaType: "IMAGE",
+        role: "preview",
+        position: 1,
+        mimeType: "image/jpeg",
+        mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
+      },
+    ],
+    cards: [
+      {
+        id: "card-1",
+        position: 0,
+        headline: "Pop Culture Has a New Home!",
+        body: "Punjab, your ultimate fandom destination is finally here! Come say hi!",
+        description: null,
+        ctaText: "Shop Now",
+        ctaType: "SHOP_NOW",
+        destinationUrl: "https://www.thesouledstore.com/stores-near-me",
+        media: [
+          {
+            id: "media-dco-1",
+            mediaType: "VIDEO",
+            role: "primary",
+            position: 0,
+            mimeType: "video/mp4",
+            mediaUrl: resolveMediaUrl(sampleMediaKey, baseUrl),
+          },
+        ],
+      },
+      {
+        id: "card-2",
+        position: 1,
+        headline: "Pop Culture Has a New Home!",
+        body: "Step inside the store, where walls turn into canvases of pure creativity",
+        description: "10% Cashback",
+        ctaText: "Shop Now",
+        ctaType: "SHOP_NOW",
+        destinationUrl: "https://www.thesouledstore.com/stores-near-me",
+        media: [
+          {
+            id: "media-dco-2",
+            mediaType: "IMAGE",
+            role: "preview",
+            position: 0,
+            mimeType: "image/jpeg",
+            mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
+          },
+        ],
+      },
+    ],
   };
 
   it("1. getPrimaryMedia correctly extracts video asset and preview image", () => {
@@ -76,31 +169,88 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
     expect(formatFactualDate("invalid-date")).toBe("Unknown");
   });
 
-  it("3. matchesFactualSearch performs factual text matching across brand, headline, primaryText, sourceAdId", () => {
-    // Brand name match
+  it("3. matchesFactualSearch performs factual text matching across brand, headline, primaryText, sourceAdId, and cards", () => {
     expect(matchesFactualSearch(sampleAd, "Mamaearth")).toBe(true);
     expect(matchesFactualSearch(sampleAd, "mama")).toBe(true);
-
-    // Headline match
     expect(matchesFactualSearch(sampleAd, "Natural Onion")).toBe(true);
-
-    // Primary text match
     expect(matchesFactualSearch(sampleAd, "antioxidants")).toBe(true);
-
-    // Source Ad ID match
     expect(matchesFactualSearch(sampleAd, "1140026857924657")).toBe(true);
-
-    // Negative match
     expect(matchesFactualSearch(sampleAd, "Nike")).toBe(false);
     expect(matchesFactualSearch(sampleAd, "9999999999")).toBe(false);
-
-    // Empty search matches all
     expect(matchesFactualSearch(sampleAd, "")).toBe(true);
     expect(matchesFactualSearch(sampleAd, "   ")).toBe(true);
+
+    // Matching against DCO card text
+    expect(matchesFactualSearch(sampleDcoAd, "fandom destination")).toBe(true);
+    expect(matchesFactualSearch(sampleDcoAd, "canvases of pure creativity")).toBe(true);
   });
 
   it("4. verifies canonical mediaUrl resolution within AdLibraryItem", () => {
     expect(sampleAd.media[0].mediaUrl.startsWith("https://media.brainfoods.in/media/sha256/")).toBe(true);
     expect(sampleAd.media[1].mediaUrl.startsWith("https://media.brainfoods.in/media/sha256/")).toBe(true);
+  });
+
+  it("5. isTemplateExpression accurately detects unresolved Meta template tokens", () => {
+    expect(isTemplateExpression("{{product.name}}")).toBe(true);
+    expect(isTemplateExpression("{{product.brand}}")).toBe(true);
+    expect(isTemplateExpression("{{product.description}}")).toBe(true);
+    expect(isTemplateExpression("{{ product.name }}")).toBe(true);
+    expect(isTemplateExpression("Buy {{product.name}} today!")).toBe(true);
+
+    // Clean strings
+    expect(isTemplateExpression("Pop Culture Has a New Home!")).toBe(false);
+    expect(isTemplateExpression("Explore Online")).toBe(false);
+    expect(isTemplateExpression("")).toBe(false);
+    expect(isTemplateExpression(null)).toBe(false);
+    expect(isTemplateExpression(undefined)).toBe(false);
+  });
+
+  it("6. sanitizeDisplayCopy strips unresolved template strings and empty values", () => {
+    expect(sanitizeDisplayCopy("{{product.name}}")).toBeNull();
+    expect(sanitizeDisplayCopy("{{product.brand}}")).toBeNull();
+    expect(sanitizeDisplayCopy("   {{product.name}}   ")).toBeNull();
+    expect(sanitizeDisplayCopy("")).toBeNull();
+    expect(sanitizeDisplayCopy("   ")).toBeNull();
+    expect(sanitizeDisplayCopy(null)).toBeNull();
+    expect(sanitizeDisplayCopy(undefined)).toBeNull();
+
+    expect(sanitizeDisplayCopy("Pop Culture Has a New Home!")).toBe(
+      "Pop Culture Has a New Home!",
+    );
+    expect(sanitizeDisplayCopy("  Shop Now  ")).toBe("Shop Now");
+  });
+
+  it("7. formatDisplayFormat renders factual multi-card tags", () => {
+    expect(formatDisplayFormat("VIDEO", 0)).toBe("VIDEO");
+    expect(formatDisplayFormat("IMAGE", 0)).toBe("IMAGE");
+    expect(formatDisplayFormat("DCO", 3)).toBe("DCO • 3 cards");
+    expect(formatDisplayFormat("DCO", 2)).toBe("DCO • 2 cards");
+    expect(formatDisplayFormat("DCO", 1)).toBe("DCO • 1 card");
+    expect(formatDisplayFormat("DCO", 0)).toBe("DCO");
+    expect(formatDisplayFormat(null, 4)).toBe("DCO • 4 cards");
+  });
+
+  it("8. DCO read-model preserves multi-card structure and ordering", () => {
+    expect(sampleDcoAd.cards).toHaveLength(2);
+    expect(sampleDcoAd.cards[0].position).toBe(0);
+    expect(sampleDcoAd.cards[1].position).toBe(1);
+    expect(sampleDcoAd.cards[0].headline).toBe("Pop Culture Has a New Home!");
+    expect(sampleDcoAd.cards[1].body).toContain("canvases of pure creativity");
+  });
+
+  it("9. zero raw template tokens leak into display-ready fields", () => {
+    const rawTokens = ["{{product.name}}", "{{product.brand}}", "{{product.description}}"];
+
+    for (const token of rawTokens) {
+      if (sampleDcoAd.headline) expect(sampleDcoAd.headline).not.toContain(token);
+      if (sampleDcoAd.primaryText) expect(sampleDcoAd.primaryText).not.toContain(token);
+      if (sampleDcoAd.description) expect(sampleDcoAd.description).not.toContain(token);
+
+      for (const card of sampleDcoAd.cards) {
+        if (card.headline) expect(card.headline).not.toContain(token);
+        if (card.body) expect(card.body).not.toContain(token);
+        if (card.description) expect(card.description).not.toContain(token);
+      }
+    }
   });
 });

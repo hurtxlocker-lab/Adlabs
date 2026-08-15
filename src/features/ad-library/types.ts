@@ -14,6 +14,18 @@ export interface AdLibraryMediaItem {
   mediaUrl: string;
 }
 
+export interface AdLibraryCardItem {
+  id: string;
+  position: number;
+  headline: string | null;
+  body: string | null;
+  description: string | null;
+  ctaText: string | null;
+  ctaType: string | null;
+  destinationUrl: string | null;
+  media: AdLibraryMediaItem[];
+}
+
 export interface AdLibraryItem {
   id: string;
   source: string;
@@ -36,6 +48,7 @@ export interface AdLibraryItem {
   lastSeenAt: Date;
   adLibraryUrl: string | null;
   media: AdLibraryMediaItem[];
+  cards: AdLibraryCardItem[];
 }
 
 export interface AdLibraryQueryParams {

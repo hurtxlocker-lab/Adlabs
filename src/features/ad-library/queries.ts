@@ -13,9 +13,11 @@ import { resolveMediaUrl } from "@/storage";
 import { eq, inArray, desc, and, or, ilike } from "drizzle-orm";
 import type {
   AdLibraryItem,
+  AdLibraryCardItem,
   AdLibraryMediaItem,
   AdLibraryQueryParams,
 } from "./types";
+import { sanitizeDisplayCopy } from "./utils";
 
 /**
  * Retrieves factual ad library items for Discover surfaces.
@@ -98,7 +100,7 @@ export async function getAdLibraryItems(
 
   const adIds = adRows.map((r) => r.id);
 
-  // 2. Fetch associated direct media assets via ad_media join
+  // 2. Fetch direct media assets via ad_media join
   const mediaRows = await db
     .select({
       adId: adMedia.adId,
@@ -114,29 +116,11 @@ export async function getAdLibraryItems(
     .where(inArray(adMedia.adId, adIds))
     .orderBy(adMedia.position);
 
-  // Fetch associated card media assets for DCO / carousel ads
-  const cardMediaRows = await db
-    .select({
-      adId: adCards.adId,
-      mediaAssetId: mediaAssets.id,
-      mediaType: mediaAssets.mediaType,
-      role: cardMedia.role,
-      position: cardMedia.position,
-      storageKey: mediaAssets.storageKey,
-      mimeType: mediaAssets.mimeType,
-    })
-    .from(cardMedia)
-    .innerJoin(adCards, eq(cardMedia.adCardId, adCards.id))
-    .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
-    .where(inArray(adCards.adId, adIds))
-    .orderBy(adCards.position, cardMedia.position);
-
-  // Group media by adId
-  const mediaByAdId = new Map<string, AdLibraryMediaItem[]>();
+  // Group direct media by adId
+  const directMediaByAdId = new Map<string, AdLibraryMediaItem[]>();
 
   for (const m of mediaRows) {
     if (!m.storageKey) continue;
-
     let mediaUrl: string;
     try {
       mediaUrl = resolveMediaUrl(m.storageKey);
@@ -153,15 +137,61 @@ export async function getAdLibraryItems(
       mediaUrl,
     };
 
-    const list = mediaByAdId.get(m.adId) ?? [];
+    const list = directMediaByAdId.get(m.adId) ?? [];
     list.push(mediaItem);
-    mediaByAdId.set(m.adId, list);
+    directMediaByAdId.set(m.adId, list);
   }
 
-  // Add card media if direct media is not already present or as supplemental media
+  // 3. Fetch cards and card media for DCO / carousel ads
+  const cardRows = await db
+    .select({
+      adId: adCards.adId,
+      cardId: adCards.id,
+      position: adCards.position,
+      title: adCards.title,
+      body: adCards.body,
+      description: adCards.description,
+      ctaText: adCards.ctaText,
+      ctaType: adCards.ctaType,
+      destinationUrl: adCards.destinationUrl,
+    })
+    .from(adCards)
+    .where(inArray(adCards.adId, adIds))
+    .orderBy(adCards.position);
+
+  const cardIds = cardRows.map((c) => c.cardId);
+
+  let cardMediaRows: {
+    adCardId: string;
+    mediaAssetId: string;
+    mediaType: string;
+    role: string | null;
+    position: number;
+    storageKey: string | null;
+    mimeType: string | null;
+  }[] = [];
+
+  if (cardIds.length > 0) {
+    cardMediaRows = await db
+      .select({
+        adCardId: cardMedia.adCardId,
+        mediaAssetId: mediaAssets.id,
+        mediaType: mediaAssets.mediaType,
+        role: cardMedia.role,
+        position: cardMedia.position,
+        storageKey: mediaAssets.storageKey,
+        mimeType: mediaAssets.mimeType,
+      })
+      .from(cardMedia)
+      .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
+      .where(inArray(cardMedia.adCardId, cardIds))
+      .orderBy(cardMedia.position);
+  }
+
+  // Group card media by adCardId
+  const mediaByCardId = new Map<string, AdLibraryMediaItem[]>();
   for (const cm of cardMediaRows) {
     if (!cm.storageKey) continue;
-
     let mediaUrl: string;
     try {
       mediaUrl = resolveMediaUrl(cm.storageKey);
@@ -178,20 +208,80 @@ export async function getAdLibraryItems(
       mediaUrl,
     };
 
-    const list = mediaByAdId.get(cm.adId) ?? [];
-    // Avoid duplicate media asset IDs
-    if (!list.some((existing) => existing.id === cm.mediaAssetId)) {
-      list.push(mediaItem);
-      mediaByAdId.set(cm.adId, list);
-    }
+    const list = mediaByCardId.get(cm.adCardId) ?? [];
+    list.push(mediaItem);
+    mediaByCardId.set(cm.adCardId, list);
   }
 
-  // 3. Assemble AdLibraryItem records (only returning items with resolved media)
+  // Group structured cards by adId
+  const cardsByAdId = new Map<string, AdLibraryCardItem[]>();
+  for (const cr of cardRows) {
+    const cardMediaList = mediaByCardId.get(cr.cardId) ?? [];
+    const cardItem: AdLibraryCardItem = {
+      id: cr.cardId,
+      position: cr.position,
+      headline: sanitizeDisplayCopy(cr.title),
+      body: sanitizeDisplayCopy(cr.body),
+      description: sanitizeDisplayCopy(cr.description),
+      ctaText: cr.ctaText ?? null,
+      ctaType: cr.ctaType ?? null,
+      destinationUrl: cr.destinationUrl ?? null,
+      media: cardMediaList,
+    };
+
+    const list = cardsByAdId.get(cr.adId) ?? [];
+    list.push(cardItem);
+    cardsByAdId.set(cr.adId, list);
+  }
+
+  // 4. Assemble canonical AdLibraryItem records with display-copy resolution
   const items: AdLibraryItem[] = [];
 
   for (const row of adRows) {
-    const media = mediaByAdId.get(row.id) ?? [];
+    const directMedia = directMediaByAdId.get(row.id) ?? [];
+    const cards = cardsByAdId.get(row.id) ?? [];
+
+    // Media list: if direct media is present, use it; otherwise, flatten unique card media
+    let media: AdLibraryMediaItem[];
+    if (directMedia.length > 0) {
+      media = directMedia;
+    } else {
+      const seenAssetIds = new Set<string>();
+      media = [];
+      for (const card of cards) {
+        for (const m of card.media) {
+          if (!seenAssetIds.has(m.id)) {
+            seenAssetIds.add(m.id);
+            media.push(m);
+          }
+        }
+      }
+    }
+
     if (media.length === 0) continue; // Require canonical media for discoverable atlas items
+
+    // Display copy resolution:
+    // 1. Sanitize ad-level fields to reject raw {{...}} template tokens
+    // 2. If ad-level field is a template token or null, fall back to first concrete card field
+    let headline = sanitizeDisplayCopy(row.headline);
+    if (!headline && cards.length > 0) {
+      headline = cards.find((c) => c.headline !== null)?.headline ?? null;
+    }
+
+    let primaryText = sanitizeDisplayCopy(row.primaryText);
+    if (!primaryText && cards.length > 0) {
+      primaryText = cards.find((c) => c.body !== null)?.body ?? null;
+    }
+
+    let description = sanitizeDisplayCopy(row.description);
+    if (!description && cards.length > 0) {
+      description = cards.find((c) => c.description !== null)?.description ?? null;
+    }
+
+    const ctaText = row.ctaText ?? (cards.length > 0 ? cards[0].ctaText : null);
+    const ctaType = row.ctaType ?? (cards.length > 0 ? cards[0].ctaType : null);
+    const destinationUrl =
+      row.destinationUrl ?? (cards.length > 0 ? cards[0].destinationUrl : null);
 
     items.push({
       id: row.id,
@@ -203,18 +293,19 @@ export async function getAdLibraryItems(
         slug: row.brandSlug,
       },
       displayFormat: row.displayFormat,
-      primaryText: row.primaryText,
-      headline: row.headline,
-      description: row.description,
-      ctaText: row.ctaText,
-      ctaType: row.ctaType,
-      destinationUrl: row.destinationUrl,
+      primaryText,
+      headline,
+      description,
+      ctaText,
+      ctaType,
+      destinationUrl,
       publisherPlatforms: row.publisherPlatforms,
       isActiveObserved: row.isActiveObserved,
       firstSeenAt: row.firstSeenAt,
       lastSeenAt: row.lastSeenAt,
       adLibraryUrl: row.adLibraryUrl,
       media,
+      cards,
     });
   }
 
@@ -275,31 +366,12 @@ export async function getAdLibraryItemById(
     .where(eq(adMedia.adId, id))
     .orderBy(adMedia.position);
 
-  // Card media
-  const cardMediaRows = await db
-    .select({
-      mediaAssetId: mediaAssets.id,
-      mediaType: mediaAssets.mediaType,
-      role: cardMedia.role,
-      position: cardMedia.position,
-      storageKey: mediaAssets.storageKey,
-      mimeType: mediaAssets.mimeType,
-    })
-    .from(cardMedia)
-    .innerJoin(adCards, eq(cardMedia.adCardId, adCards.id))
-    .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
-    .where(eq(adCards.adId, id))
-    .orderBy(adCards.position, cardMedia.position);
-
-  const media: AdLibraryMediaItem[] = [];
-  const seenAssetIds = new Set<string>();
-
+  const directMedia: AdLibraryMediaItem[] = [];
   for (const m of mediaRows) {
     if (!m.storageKey) continue;
     try {
       const mediaUrl = resolveMediaUrl(m.storageKey);
-      seenAssetIds.add(m.mediaAssetId);
-      media.push({
+      directMedia.push({
         id: m.mediaAssetId,
         mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
         role: m.role,
@@ -312,23 +384,120 @@ export async function getAdLibraryItemById(
     }
   }
 
+  // Cards
+  const cardRows = await db
+    .select({
+      cardId: adCards.id,
+      position: adCards.position,
+      title: adCards.title,
+      body: adCards.body,
+      description: adCards.description,
+      ctaText: adCards.ctaText,
+      ctaType: adCards.ctaType,
+      destinationUrl: adCards.destinationUrl,
+    })
+    .from(adCards)
+    .where(eq(adCards.adId, id))
+    .orderBy(adCards.position);
+
+  const cardIds = cardRows.map((c) => c.cardId);
+
+  let cardMediaRows: {
+    adCardId: string;
+    mediaAssetId: string;
+    mediaType: string;
+    role: string | null;
+    position: number;
+    storageKey: string | null;
+    mimeType: string | null;
+  }[] = [];
+
+  if (cardIds.length > 0) {
+    cardMediaRows = await db
+      .select({
+        adCardId: cardMedia.adCardId,
+        mediaAssetId: mediaAssets.id,
+        mediaType: mediaAssets.mediaType,
+        role: cardMedia.role,
+        position: cardMedia.position,
+        storageKey: mediaAssets.storageKey,
+        mimeType: mediaAssets.mimeType,
+      })
+      .from(cardMedia)
+      .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
+      .where(inArray(cardMedia.adCardId, cardIds))
+      .orderBy(cardMedia.position);
+  }
+
+  const mediaByCardId = new Map<string, AdLibraryMediaItem[]>();
   for (const cm of cardMediaRows) {
-    if (!cm.storageKey || seenAssetIds.has(cm.mediaAssetId)) continue;
+    if (!cm.storageKey) continue;
     try {
       const mediaUrl = resolveMediaUrl(cm.storageKey);
-      seenAssetIds.add(cm.mediaAssetId);
-      media.push({
+      const mediaItem: AdLibraryMediaItem = {
         id: cm.mediaAssetId,
         mediaType: (cm.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
         role: cm.role ?? "card",
         position: cm.position,
         mimeType: cm.mimeType,
         mediaUrl,
-      });
+      };
+      const list = mediaByCardId.get(cm.adCardId) ?? [];
+      list.push(mediaItem);
+      mediaByCardId.set(cm.adCardId, list);
     } catch {
       continue;
     }
   }
+
+  const cards: AdLibraryCardItem[] = cardRows.map((cr) => ({
+    id: cr.cardId,
+    position: cr.position,
+    headline: sanitizeDisplayCopy(cr.title),
+    body: sanitizeDisplayCopy(cr.body),
+    description: sanitizeDisplayCopy(cr.description),
+    ctaText: cr.ctaText ?? null,
+    ctaType: cr.ctaType ?? null,
+    destinationUrl: cr.destinationUrl ?? null,
+    media: mediaByCardId.get(cr.cardId) ?? [],
+  }));
+
+  // Resolve media list
+  let media: AdLibraryMediaItem[];
+  if (directMedia.length > 0) {
+    media = directMedia;
+  } else {
+    const seenAssetIds = new Set<string>();
+    media = [];
+    for (const card of cards) {
+      for (const m of card.media) {
+        if (!seenAssetIds.has(m.id)) {
+          seenAssetIds.add(m.id);
+          media.push(m);
+        }
+      }
+    }
+  }
+
+  let headline = sanitizeDisplayCopy(row.headline);
+  if (!headline && cards.length > 0) {
+    headline = cards.find((c) => c.headline !== null)?.headline ?? null;
+  }
+
+  let primaryText = sanitizeDisplayCopy(row.primaryText);
+  if (!primaryText && cards.length > 0) {
+    primaryText = cards.find((c) => c.body !== null)?.body ?? null;
+  }
+
+  let description = sanitizeDisplayCopy(row.description);
+  if (!description && cards.length > 0) {
+    description = cards.find((c) => c.description !== null)?.description ?? null;
+  }
+
+  const ctaText = row.ctaText ?? (cards.length > 0 ? cards[0].ctaText : null);
+  const ctaType = row.ctaType ?? (cards.length > 0 ? cards[0].ctaType : null);
+  const destinationUrl =
+    row.destinationUrl ?? (cards.length > 0 ? cards[0].destinationUrl : null);
 
   return {
     id: row.id,
@@ -340,17 +509,18 @@ export async function getAdLibraryItemById(
       slug: row.brandSlug,
     },
     displayFormat: row.displayFormat,
-    primaryText: row.primaryText,
-    headline: row.headline,
-    description: row.description,
-    ctaText: row.ctaText,
-    ctaType: row.ctaType,
-    destinationUrl: row.destinationUrl,
+    primaryText,
+    headline,
+    description,
+    ctaText,
+    ctaType,
+    destinationUrl,
     publisherPlatforms: row.publisherPlatforms,
     isActiveObserved: row.isActiveObserved,
     firstSeenAt: row.firstSeenAt,
     lastSeenAt: row.lastSeenAt,
     adLibraryUrl: row.adLibraryUrl,
     media,
+    cards,
   };
 }
