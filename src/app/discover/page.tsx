@@ -3,6 +3,7 @@ import { getAdLibraryItems } from "@/features/ad-library";
 import { Header } from "@/components/navigation/header";
 import { SearchBar } from "@/features/discover/components/search-bar";
 import { CreativeCard } from "@/features/discover/components/creative-card";
+import { partitionIntoClusters } from "@/features/discover/utils/cluster-rhythm";
 
 interface DiscoverPageProps {
   searchParams: Promise<{
@@ -34,8 +35,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     ),
   );
 
-  const leadItem = items.length > 0 ? items[0] : null;
-  const supportingItems = items.length > 1 ? items.slice(1) : [];
+  const clusters = partitionIntoClusters(items);
 
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
@@ -67,8 +67,8 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
           </Suspense>
         </section>
 
-        {/* Creative Field: Dominant Lead + Asymmetric Supporting Works */}
-        <section className="w-full">
+        {/* Creative Field: Deterministic Cluster Rhythm */}
+        <section className="w-full flex flex-col gap-14 sm:gap-20">
           {items.length === 0 ? (
             <div className="w-full py-20 px-4 text-center border border-[#161820] bg-[#090b10] flex flex-col items-center justify-center gap-2">
               <p className="text-sm text-[#f3f4f6] font-medium font-sans">
@@ -78,36 +78,107 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                 Try adjusting active search filters to view all monitored creatives.
               </p>
             </div>
-          ) : items.length <= 3 && leadItem ? (
-            /* Authored layout for 3-ad corpus */
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
-              {/* Dominant Primary Creative (7 cols) */}
-              <div className="lg:col-span-7">
-                <CreativeCard item={leadItem} layoutRole="lead" />
-              </div>
-
-              {/* Sequenced Secondary Creatives (5 cols) */}
-              <div className="lg:col-span-5 flex flex-col gap-10">
-                {supportingItems.map((item) => (
-                  <CreativeCard
-                    key={item.id}
-                    item={item}
-                    layoutRole="supporting"
-                  />
-                ))}
-              </div>
-            </div>
           ) : (
-            /* Responsive grid if corpus grows */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 items-start">
-              {items.map((item) => (
-                <CreativeCard
-                  key={item.id}
-                  item={item}
-                  layoutRole="supporting"
-                />
-              ))}
-            </div>
+            clusters.map((cluster) => {
+              if (cluster.type === "lead-companion") {
+                const lead = cluster.items[0];
+                const companions = cluster.items.slice(1);
+
+                return (
+                  <div
+                    key={cluster.id}
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
+                  >
+                    {/* Dominant Lead Artifact (7 cols) */}
+                    {lead && (
+                      <div className="lg:col-span-7">
+                        <CreativeCard item={lead.item} layoutRole="lead" />
+                      </div>
+                    )}
+
+                    {/* Stacked Supporting Companions (5 cols) */}
+                    {companions.length > 0 && (
+                      <div className="lg:col-span-5 flex flex-col gap-8 lg:gap-10">
+                        {companions.map((c) => (
+                          <CreativeCard
+                            key={c.item.id}
+                            item={c.item}
+                            layoutRole="supporting"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              if (cluster.type === "offset-duo-wide") {
+                const duo = cluster.items.slice(0, 2);
+                const wide = cluster.items[2];
+
+                return (
+                  <div
+                    key={cluster.id}
+                    className="flex flex-col gap-10 lg:gap-14"
+                  >
+                    {/* Balanced Offset Duo (Side-by-Side) */}
+                    {duo.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
+                        {duo.map((c, idx) => (
+                          <div
+                            key={c.item.id}
+                            className={idx === 1 ? "md:pt-8 lg:pt-14" : ""}
+                          >
+                            <CreativeCard
+                              item={c.item}
+                              layoutRole="offset"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Wide Centerpiece Interruption */}
+                    {wide && (
+                      <div className="w-full pt-2 sm:pt-4 border-t border-[#12141c]/60">
+                        <CreativeCard item={wide.item} layoutRole="wide" />
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // mirrored-lead
+              const companions = cluster.items.slice(0, 2);
+              const lead = cluster.items[2];
+
+              return (
+                <div
+                  key={cluster.id}
+                  className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
+                >
+                  {/* Stacked Supporting Companions (5 cols left) */}
+                  {companions.length > 0 && (
+                    <div className="lg:col-span-5 flex flex-col gap-8 lg:gap-10">
+                      {companions.map((c) => (
+                        <CreativeCard
+                          key={c.item.id}
+                          item={c.item}
+                          layoutRole="supporting"
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Dominant Lead Artifact (7 cols right) */}
+                  {lead && (
+                    <div className="lg:col-span-7">
+                      <CreativeCard item={lead.item} layoutRole="lead" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </section>
       </main>
