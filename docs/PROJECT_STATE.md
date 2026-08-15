@@ -62,6 +62,7 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 - **Media Orchestration (Step 4D3 + 4D3.1)**: Two-phase decoupled orchestration (`src/ingestion/media-orchestration/`). Phase A (`prepareAdMedia`) performs external download, SHA-256 calculation, and R2 storage with bounded concurrency (3), temp file cleanup, and in-memory memoization without holding any DB connection. Separation of physical media type (`IMAGE`, `VIDEO`, `UNKNOWN`) from semantic preview usage (`role: "preview"`).
 - **Atomic Single-Ad Workflow (Step 4E)**: Unified two-phase end-to-end single-ad pipeline (`ingestNormalizedAd`). Phase A executes media preparation with zero DB connection; Phase B commits raw payload, ad upsert, card reconciliation, direct/card media reconciliation, and run observation in ONE short atomic PostgreSQL transaction with observation-last guarantee.
 - **Batch Ingestion Run Orchestration (Step 4F)**: Full run-level batch orchestration engine (`runCuriousCoderIngestion`) over in-memory Curious Coder payload arrays. Sequential item processing, item-level failure isolation (`failures` reporting with typed stage classification), truthful counter accumulation (`createdAdsCount` $\rightarrow$ `new_ads_count`, `updatedAdsCount` $\rightarrow$ `updated_ads_count`, uninstrumented media metrics kept at 0), and strict `ingestion_runs` finalization (`SUCCEEDED`, `PARTIAL`, `FAILED`).
+- **Apify Saved-Task Adapter & Live End-to-End Smoke Ingestion (Step 4G)**: Decoupled Apify provider adapter (`src/ingestion/providers/apify/`) executing saved Apify task (`hurtxlocker/3-ad-task-mamaearth`) without actor input reconstruction. Live smoke run on 2026-08-15 (Run `lDqD8PcsDpaatgNV5`, Dataset `1VAqLdRZiiygZwvnj`) successfully ingested 3 real Mamaearth video ads into Supabase (`5f91511b-a185-4d69-82de-e4974c3592d6`), downloaded 6 media assets (3 MP4 videos + 3 JPEG previews), computed exact streaming SHA-256 hashes, uploaded to Cloudflare R2 (`media/sha256/<sha256>`), verified via R2 HEAD (100% byte size match), and persisted atomic observations. Accommodates Curious Coder minimum charge threshold (`count: 10`) via independent local hard cap (`LOCAL_HARD_CAP = 3`).
 - **Test Architecture**: Clean separation between pure offline unit tests (`pnpm test`), database integration tests (`pnpm test:db`), and live R2 smoke test (`pnpm test:r2`).
 
 ---
@@ -182,9 +183,15 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 ---
 
 ## Immediate Next Step
-**Step 4G — Apify Adapter & Live Smoke Crawl**
-- **Objective**: Build Apify actor integration wrapper and run a tiny controlled real crawl against a single brand's Meta Ad Library page, verifying complete end-to-end ingestion from live scraper JSON through R2 storage and database persistence.
-- **Scope**: Apify client adapter, dataset fetcher, rate-limited live smoke run.
+**Step 4H — Controlled Longitudinal Rerun Proof**
+- **Objective**: Rerun the same configured advertiser after a suitable interval to prove:
+  1. Existing canonical ads reuse existing `ads.id` rows.
+  2. `first_seen_at` remains unchanged.
+  3. `last_seen_at` advances to the new run timestamp.
+  4. A new observation row is created per observed ad for the new ingestion run.
+  5. Newly appearing ads are identified as new (`createdAdsCount`).
+  6. Exact duplicate media reuses existing SHA-addressed `media_assets` and R2 objects without redundant upload or duplication.
+  7. Persisted media retrieval remains 100% independent of ephemeral original Meta CDN URLs.
 
 ---
 

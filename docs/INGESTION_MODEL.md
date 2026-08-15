@@ -439,3 +439,37 @@ Incoming Provider Items (unknown[])
    - Media download counters (`media_downloaded_count`, `bytes_downloaded`, etc.) remain `0` / `0n` as documented uninstrumented metrics in Step 4F.
 5. **Parse-Failure Raw Archival Boundary**: `raw_ingestion_items` records raw payloads for items reaching atomic normalized ad persistence. Provider items rejected by schema validation at the parse stage do not create `raw_ingestion_items` rows in M0.
 6. **Strict Finalization Ownership**: Once `startIngestionRun` succeeds, the runner owns finalization. If `finishIngestionRun` throws, the failure is propagated as an `IngestionRunFatalError` without blind retries or false success results.
+
+---
+
+## 14. Apify Saved-Task Adapter & Live Orchestration (Step 4G)
+
+Step 4G introduces a narrow, decoupled Apify adapter (`src/ingestion/providers/apify/`) that fetches raw dataset items from a pre-configured saved Apify Task and composes externally with the Step 4F batch runner.
+
+```
+[ Saved Apify Task: hurtxlocker/3-ad-task-mamaearth ]
+                     │  (count: 10, scrapeAdDetails: false)
+                     ▼
+       ( Apify Saved-Task Adapter )
+       • Executes saved task as-is (Zero actor input reconstruction)
+       • Single execution attempt (Zero automatic retries)
+       • Enforces local blast-radius hard cap (limit: 3)
+                     │
+                     ▼
+         raw provider items (unknown[])
+                     │
+                     ▼
+         ( Step 4F Batch Orchestrator )
+         • Independent of Apify SDK
+         • Verifies consistent top-level advertiser page_id
+         • Executes parse → normalize → two-phase single ad persistence
+```
+
+### Invariants & Guarantees:
+1. **Saved Task as External Execution Boundary**: AdLabs does not reconstruct or override Curious Coder actor inputs in application code. It triggers the saved Apify Task (`client.task(taskId).call()`) and retrieves the output dataset.
+2. **Actor Minimum Count vs Local Hard Cap**: The Curious Coder actor requires a minimum configured count of 10 (`"Maximum charged results" option must be atleast 10 to run this actor`). AdLabs accommodates this by setting the task count to 10 while independently enforcing a strict local hard cap of 3 (`LOCAL_HARD_CAP = 3`) to preserve zero-burn safeguards.
+3. **Canonical Identity Invariant**: `ad_archive_id` remains the sole canonical Meta external ad identity. Top-level provider error objects or payloads missing `ad_archive_id` fail schema validation; there is zero fallback to `ad_id` or synthetic IDs.
+4. **Advertiser Page ID Consistency**: The tracked `sourcePageId` is derived exclusively from the top-level `item.page_id` of parsed items. All locally processed items in a single run must agree on the same advertiser `page_id`; any mismatch halts execution before database mutation.
+5. **No Network Inside Step 4F**: Step 4F remains completely unaware of Apify and network adapters, ensuring the core batch orchestration engine remains 100% offline-testable.
+6. **Zero Automatic Retries**: All failures (task run timeout, dataset retrieval, or schema mismatch) fail immediately without automatic retry loops.
+7. **Explicit CLI Lifecycle Cleanup**: The manual DEV runner (`scripts/ingest-curious-coder-dev.ts`) executes inside a `try ... finally` block that invokes `closeDatabaseConnection()` to cleanly release postgres.js connection pool handles, ensuring natural process exit back to the shell prompt.

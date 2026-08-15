@@ -61,3 +61,14 @@ if (process.env.NODE_ENV !== "production") {
 // ---------------------------------------------------------------------------
 
 export const db = drizzle(sql, { schema });
+
+/**
+ * Safely closes the underlying PostgreSQL connection pool.
+ * Used by CLI scripts and standalone runners to ensure clean process termination.
+ */
+export async function closeDatabaseConnection(): Promise<void> {
+  await sql.end();
+  if (process.env.NODE_ENV !== "production") {
+    globalForDb._pgClient = undefined;
+  }
+}

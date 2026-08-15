@@ -78,6 +78,20 @@ const serverEnvSchema = z.object({
    * Optional Cloudflare R2 Public Base URL for presentation/linking.
    */
   R2_PUBLIC_BASE_URL: z.string().url().optional().or(z.literal("")).optional(),
+
+  /**
+   * Apify API token for executing saved tasks.
+   * Required only when running the Apify adapter (pnpm ingest:curious-coder:dev).
+   * Optional here so pnpm test and pnpm build do not fail if absent.
+   */
+  APIFY_TOKEN: z.string().min(1).optional(),
+
+  /**
+   * Apify saved task identifier for the Curious Coder Meta scraper.
+   * Example: "hurtxlocker/3-ad-task-mamaearth"
+   * Required only when running the Apify adapter.
+   */
+  APIFY_CURIOUS_CODER_TASK_ID: z.string().min(1).optional(),
 });
 
 const parsed = serverEnvSchema.safeParse(process.env);
