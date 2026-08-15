@@ -7,30 +7,27 @@ import { formatFactualDate, getPrimaryMedia } from "../../ad-library/utils";
 
 interface CreativeCardProps {
   item: AdLibraryItem;
-  layoutRole?: "lead" | "supporting-tall" | "supporting-compact";
+  layoutRole?: "lead" | "supporting";
 }
 
 export function CreativeCard({
   item,
-  layoutRole = "supporting-tall",
+  layoutRole = "supporting",
 }: CreativeCardProps) {
   const { video, preview, displayMedia } = getPrimaryMedia(item);
   const [isPlaying, setIsPlaying] = useState(false);
 
   const isVideo = item.displayFormat === "VIDEO" || video !== undefined;
   const isLead = layoutRole === "lead";
-  const isCompact = layoutRole === "supporting-compact";
 
   return (
-    <article className="group flex flex-col bg-[#0d0f15] border border-[#1a1d24] hover:border-zinc-700 transition-colors duration-200 overflow-hidden">
-      {/* 1. Media Viewport: Pure Creative Artifact */}
+    <article className="group flex flex-col transition-all duration-200">
+      {/* 1. Primary Creative Object (Dominant Hero) */}
       <div
-        className={`relative w-full bg-[#050608] flex items-center justify-center overflow-hidden ${
+        className={`relative w-full bg-[#030406] border border-[#161820] flex items-center justify-center overflow-hidden ${
           isLead
-            ? "min-h-[360px] sm:min-h-[460px] max-h-[580px]"
-            : isCompact
-              ? "min-h-[220px] sm:min-h-[260px] max-h-[320px]"
-              : "min-h-[280px] sm:min-h-[340px] max-h-[420px]"
+            ? "min-h-[420px] sm:min-h-[520px] max-h-[640px]"
+            : "min-h-[280px] sm:min-h-[340px] max-h-[420px]"
         }`}
       >
         {isVideo && video ? (
@@ -55,19 +52,19 @@ export function CreativeCard({
                     src={preview.mediaUrl}
                     alt={item.headline || item.brand.name}
                     loading="lazy"
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain transition-transform duration-300 group-hover/player:scale-[1.01]"
                   />
                 ) : (
-                  <div className="w-full h-64 flex items-center justify-center bg-zinc-950 text-zinc-600 font-sans text-xs">
+                  <div className="w-full h-64 flex items-center justify-center font-mono text-xs text-[#686e7b]">
                     Video Creative
                   </div>
                 )}
 
-                {/* Subtle Play Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/15 group-hover/player:bg-black/5 transition-colors">
-                  <div className="w-11 h-11 rounded-full bg-black/75 border border-white/20 flex items-center justify-center shadow-lg group-hover/player:scale-105 transition-transform">
+                {/* Subtle Cultural Play Trigger */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover/player:bg-black/0 transition-colors">
+                  <div className="w-12 h-12 rounded-full bg-[#07080a]/90 border border-white/20 flex items-center justify-center shadow-lg group-hover/player:scale-105 group-hover/player:border-[#d46b38] transition-all">
                     <svg
-                      className="w-4 h-4 text-white ml-0.5"
+                      className="w-4 h-4 text-[#f3f4f6] ml-0.5"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -87,76 +84,85 @@ export function CreativeCard({
             className="w-full h-full object-contain"
           />
         ) : (
-          <div className="w-full h-64 flex items-center justify-center bg-zinc-950 text-zinc-600 font-sans text-xs">
+          <div className="w-full h-64 flex items-center justify-center font-mono text-xs text-[#686e7b]">
             Creative Media
           </div>
         )}
       </div>
 
-      {/* 2. Typographic Annotations (Integrated Artifact Anatomy, Not a Boxed Footer) */}
-      <div className={`flex flex-col gap-2 ${isLead ? "p-5 sm:p-6" : "p-4 sm:p-5"}`}>
-        {/* Attribution & Observation Line */}
-        <div className="flex items-center justify-between text-xs font-sans">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-amber-400">
+      {/* 2. Marginal Evidence & Persuasion Deck (Aligned by Proximity) */}
+      <div
+        className={`flex flex-col gap-3 pt-4 ${
+          isLead ? "sm:pt-5" : "sm:pt-4"
+        }`}
+      >
+        {/* Factual Marginalia Line */}
+        <div className="flex flex-wrap items-baseline justify-between gap-y-1 text-xs border-b border-[#14161f] pb-2">
+          <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
+            <span className="font-sans font-medium text-[#f3f4f6] tracking-tight text-sm sm:text-base">
               {item.brand.name}
             </span>
-            <span className="text-zinc-600">•</span>
-            <span className="text-zinc-400 text-[11px]">
-              {formatFactualDate(item.firstSeenAt)}
+            <span className="text-[#3a3f4c] select-none">•</span>
+            <span className="font-mono text-xs text-[#8e95a2] tabular-nums">
+              First seen {formatFactualDate(item.firstSeenAt)}
             </span>
             {item.isActiveObserved === true && (
               <>
-                <span className="text-zinc-600">•</span>
-                <span className="text-zinc-400 text-[11px]">Active</span>
+                <span className="text-[#3a3f4c] select-none">•</span>
+                <span className="font-mono text-xs text-[#8e95a2]">
+                  Active when observed
+                </span>
               </>
             )}
           </div>
 
-          <span className="text-zinc-500 text-[11px]">
+          <span className="font-mono text-xs text-[#8e95a2] uppercase">
             {item.displayFormat || "Video"}
           </span>
         </div>
 
-        {/* Headline */}
+        {/* Headline (Editorial Presence) */}
         {item.headline && (
           <h3
-            className={`font-sans font-medium text-zinc-100 leading-snug ${
-              isLead ? "text-base sm:text-lg" : "text-sm sm:text-base"
+            className={`font-editorial font-medium text-[#f3f4f6] leading-snug ${
+              isLead ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl"
             } line-clamp-2`}
           >
             <Link
               href={`/ads/${item.id}`}
-              className="hover:text-amber-300 transition-colors"
+              className="hover:text-[#e07945] transition-colors"
             >
               {item.headline}
             </Link>
           </h3>
         )}
 
-        {/* Copy Snippet */}
+        {/* Primary Copy Prose */}
         {item.primaryText && (
           <p
-            className={`font-sans text-zinc-400 leading-relaxed ${
+            className={`font-sans text-[#9da2ad] leading-[1.7] ${
               isLead
-                ? "text-sm line-clamp-3"
-                : isCompact
-                  ? "text-xs line-clamp-1"
-                  : "text-xs line-clamp-2"
+                ? "text-sm sm:text-base line-clamp-3 max-w-2xl"
+                : "text-xs sm:text-sm line-clamp-2"
             }`}
           >
             {item.primaryText}
           </p>
         )}
 
-        {/* Action Link: Quiet Navigation */}
-        <div className="pt-2 flex items-center justify-between text-xs font-sans">
+        {/* Action Link */}
+        <div className="pt-2 flex items-center justify-between">
           <Link
             href={`/ads/${item.id}`}
-            className="text-zinc-400 hover:text-amber-300 font-medium transition-colors inline-flex items-center gap-1"
+            className="font-sans text-xs sm:text-sm text-[#f3f4f6] hover:text-[#e07945] font-medium transition-colors inline-flex items-center gap-1.5 group/link"
           >
-            Examine creative
-            <span aria-hidden="true">→</span>
+            <span>Examine creative</span>
+            <span
+              className="group-hover/link:translate-x-0.5 transition-transform"
+              aria-hidden="true"
+            >
+              →
+            </span>
           </Link>
         </div>
       </div>

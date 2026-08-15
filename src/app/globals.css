@@ -1,47 +1,100 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090a0c;
-  --foreground: #ededed;
-  --muted: #8e8e93;
-  --border: #22252a;
-  --border-subtle: #181a1f;
-  --surface: #111317;
-  --surface-raised: #181a20;
-  --accent: #e5933a;
+  /* Surface System: Deep Mineral Ink Hierarchy */
+  --surface-canvas: #07080a;
+  --surface-media: #030406;
+  --surface-raised: #0c0e13;
+  --surface-elevated: #12151b;
+  --surface-overlay: #181b23;
+
+  /* Typography Hierarchy */
+  --text-primary: #f3f4f6;    /* 100% luminance warm white */
+  --text-secondary: #9da2ad;  /* 70% reading text */
+  --text-muted: #686e7b;      /* 45% annotations */
+  --text-evidence: #8e95a2;   /* 60% legible evidence & marginalia */
+
+  /* Hairlines & Structural Lines */
+  --line-subtle: #16181f;
+  --line-border: #20242e;
+  --line-highlight: #2e3340;
+
+  /* Accent: Grounded Mineral Terracotta */
+  --accent-primary: #d46b38;
+  --accent-hover: #e07945;
+  --accent-subtle: rgba(212, 107, 56, 0.12);
+
+  /* Fonts */
+  --font-editorial: var(--font-newsreader), Georgia, serif;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-border-subtle: var(--border-subtle);
-  --color-surface: var(--surface);
+  --color-canvas: var(--surface-canvas);
+  --color-media: var(--surface-media);
   --color-surface-raised: var(--surface-raised);
-  --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-overlay: var(--surface-overlay);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-evidence: var(--text-evidence);
+
+  --color-line-subtle: var(--line-subtle);
+  --color-line-border: var(--line-border);
+  --color-line-highlight: var(--line-highlight);
+
+  --color-accent: var(--accent-primary);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --font-editorial: var(--font-editorial);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom hairline dividers and utility rules */
-.border-hairline {
-  border-color: var(--border-subtle);
+.font-editorial {
+  font-family: var(--font-editorial);
 }
 
-.border-subtle {
-  border-color: var(--border);
+.font-sans {
+  font-family: var(--font-sans);
 }
 
-/* Tabular numbers for metadata */
-.font-mono-numbers {
-  font-family: var(--font-mono), monospace;
+.font-mono {
+  font-family: var(--font-mono);
   font-feature-settings: "tnum" 1;
+}
+
+/* Structural Hairlines */
+.hairline-b {
+  border-bottom: 1px solid var(--line-subtle);
+}
+
+.hairline-t {
+  border-top: 1px solid var(--line-subtle);
+}
+
+.hairline-r {
+  border-right: 1px solid var(--line-subtle);
+}
+
+.hairline-l {
+  border-left: 1px solid var(--line-subtle);
+}
+
+::selection {
+  background-color: var(--accent-subtle);
+  color: #fff;
 }
