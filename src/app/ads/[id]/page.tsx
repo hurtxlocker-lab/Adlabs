@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdLibraryItemById } from "@/features/ad-library";
-import { formatFactualDate } from "@/features/ad-library/utils";
+import {
+  formatDisplayFormat,
+  formatFactualDate,
+} from "@/features/ad-library/utils";
 import { Header } from "@/components/navigation/header";
 import { DetailMediaPlayer } from "@/features/discover/components/detail-media-player";
 
@@ -22,6 +25,12 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
   }
 
   const isObservedActive = item.isActiveObserved;
+  const variations = item.variations ?? [];
+  const isMultiVariation = variations.length > 1;
+  const formattedFormat = formatDisplayFormat(
+    item.displayFormat,
+    variations.length,
+  );
 
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
@@ -45,48 +54,69 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
 
         {/* Two-Column Factual Composition */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-          {/* Left Column: Heroic Media Centerpiece (7 cols) */}
+          {/* Left Column: Creative Inspection (7 cols) */}
           <section className="lg:col-span-7 flex flex-col gap-6">
-            <DetailMediaPlayer item={item} />
+            {isMultiVariation ? (
+              /* Multi-Variation Unfolded Sequence */
+              <div className="flex flex-col gap-8">
+                {/* Section Header */}
+                <div className="flex items-center justify-between border-b border-[#16181f] pb-3">
+                  <h2 className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
+                    Creative variations ({variations.length})
+                  </h2>
+                  <span className="font-mono text-xs text-[#686e7b]">
+                    {formattedFormat}
+                  </span>
+                </div>
 
-            {/* Sequential DCO / Multi-Variation Breakdown */}
-            {item.variations && item.variations.length > 1 && (
-              <div className="flex flex-col gap-4 pt-6 border-t border-[#16181f]">
-                <h2 className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
-                  Creative variations ({item.variations.length})
-                </h2>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {item.variations.map((variation, idx) => {
+                {/* Direct Sequential Variations */}
+                <div className="flex flex-col divide-y divide-[#16181f]">
+                  {variations.map((variation, idx) => {
                     const variationPrimaryMedia =
                       variation.media.find((m) => m.role !== "preview") ??
                       variation.media[0];
                     const variationPreview = variation.media.find(
                       (m) => m.role === "preview",
                     );
+                    const isVideo =
+                      variationPrimaryMedia?.mediaType === "VIDEO";
 
                     return (
                       <div
                         key={variation.id}
-                        className="bg-[#090b10] border border-[#161820] p-4 flex flex-col gap-3"
+                        className={`flex flex-col gap-4 ${
+                          idx > 0 ? "pt-10" : ""
+                        }`}
                       >
-                        {/* Variation Media Preview */}
-                        <div className="relative w-full h-44 bg-[#030406] border border-[#14161e] flex items-center justify-center overflow-hidden">
-                          {variationPrimaryMedia?.mediaType === "VIDEO" ? (
+                        {/* Variation Position & Optional CTA */}
+                        <div className="flex items-center justify-between text-xs font-mono text-[#8e95a2]">
+                          <span className="text-[#f3f4f6] font-medium">
+                            Variation {idx + 1}
+                          </span>
+                          {variation.ctaText && (
+                            <span className="text-[#8e95a2] border border-[#1a1d25] bg-[#0c0e13] px-2 py-0.5">
+                              {variation.ctaText}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Media Mount */}
+                        <div className="relative w-full bg-[#030406] border border-[#161820] flex items-center justify-center min-h-[380px] sm:min-h-[460px] max-h-[660px] overflow-hidden">
+                          {isVideo && variationPrimaryMedia ? (
                             <video
                               src={variationPrimaryMedia.mediaUrl}
                               poster={variationPreview?.mediaUrl}
                               preload="none"
                               controls
                               playsInline
-                              className="w-full h-full object-contain"
+                              className="w-full h-full max-h-[660px] object-contain"
                             />
                           ) : variationPrimaryMedia ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={variationPrimaryMedia.mediaUrl}
                               alt={variation.headline || `Variation ${idx + 1}`}
-                              className="w-full h-full object-contain"
+                              className="w-full h-full max-h-[660px] object-contain"
                             />
                           ) : (
                             <span className="font-mono text-xs text-[#686e7b]">
@@ -95,31 +125,22 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
                           )}
                         </div>
 
-                        {/* Variation Metadata */}
-                        <div className="flex flex-col gap-1.5 pt-1">
-                          <div className="flex items-center justify-between text-xs font-mono text-[#8e95a2]">
-                            <span>Variation {idx + 1}</span>
-                            {variation.ctaText && (
-                              <span className="text-[#f3f4f6]">
-                                {variation.ctaText}
-                              </span>
-                            )}
-                          </div>
-
+                        {/* Variation Copy Deck */}
+                        <div className="flex flex-col gap-2 pt-1">
                           {variation.headline && (
-                            <h3 className="font-editorial text-base text-[#f3f4f6] leading-snug">
+                            <h3 className="font-editorial text-xl sm:text-2xl text-[#f3f4f6] leading-snug">
                               {variation.headline}
                             </h3>
                           )}
 
                           {variation.body && (
-                            <p className="font-sans text-xs text-[#9da2ad] leading-relaxed line-clamp-3">
+                            <p className="font-sans text-sm text-[#9da2ad] leading-[1.75] whitespace-pre-line border-l-2 border-[#1c202a] pl-4">
                               {variation.body}
                             </p>
                           )}
 
                           {variation.description && (
-                            <p className="font-mono text-[11px] text-[#686e7b]">
+                            <p className="font-mono text-xs text-[#686e7b]">
                               {variation.description}
                             </p>
                           )}
@@ -129,9 +150,10 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
                               href={variation.destinationUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] font-sans text-[#8e95a2] hover:text-[#e07945] transition-colors truncate pt-1"
+                              className="text-xs font-sans text-[#8e95a2] hover:text-[#e07945] transition-colors truncate pt-1 inline-flex items-center gap-1"
                             >
-                              {variation.destinationUrl}
+                              <span>{variation.destinationUrl}</span>
+                              <span aria-hidden="true">↗</span>
                             </a>
                           )}
                         </div>
@@ -140,6 +162,9 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
                   })}
                 </div>
               </div>
+            ) : (
+              /* Single-Creative Hero Presentation */
+              <DetailMediaPlayer item={item} />
             )}
           </section>
 
@@ -170,64 +195,65 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
               </div>
             </div>
 
-            {/* Headline */}
-            {item.headline && (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
-                  Headline
-                </span>
-                <p className="text-xl sm:text-2xl font-medium text-[#f3f4f6] leading-snug font-editorial">
-                  {item.headline}
-                </p>
-              </div>
-            )}
+            {/* Single Creative Ad Copy (only when not multi-variation) */}
+            {!isMultiVariation && (
+              <>
+                {item.headline && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
+                      Headline
+                    </span>
+                    <p className="text-xl sm:text-2xl font-medium text-[#f3f4f6] leading-snug font-editorial">
+                      {item.headline}
+                    </p>
+                  </div>
+                )}
 
-            {/* Primary Text */}
-            {item.primaryText && (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
-                  Creative Copy
-                </span>
-                <p className="text-sm sm:text-base text-[#9da2ad] leading-[1.75] font-sans whitespace-pre-line border-l-2 border-[#1c202a] pl-4">
-                  {item.primaryText}
-                </p>
-              </div>
-            )}
+                {item.primaryText && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
+                      Creative Copy
+                    </span>
+                    <p className="text-sm sm:text-base text-[#9da2ad] leading-[1.75] font-sans whitespace-pre-line border-l-2 border-[#1c202a] pl-4">
+                      {item.primaryText}
+                    </p>
+                  </div>
+                )}
 
-            {/* Description */}
-            {item.description && (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
-                  Description
-                </span>
-                <p className="text-xs text-[#686e7b] leading-relaxed font-sans">
-                  {item.description}
-                </p>
-              </div>
-            )}
+                {item.description && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
+                      Description
+                    </span>
+                    <p className="text-xs text-[#686e7b] leading-relaxed font-sans">
+                      {item.description}
+                    </p>
+                  </div>
+                )}
 
-            {/* Call to Action */}
-            {item.ctaText && (
-              <div className="flex flex-col gap-2 pt-4 border-t border-[#16181f]">
-                <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
-                  Call to Action
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 text-xs font-sans font-medium bg-[#12151b] text-[#f3f4f6] border border-[#20242e]">
-                    {item.ctaText}
-                  </span>
-                  {item.destinationUrl && (
-                    <a
-                      href={item.destinationUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-sans text-[#9da2ad] hover:text-[#e07945] transition-colors truncate max-w-[220px]"
-                    >
-                      {item.destinationUrl}
-                    </a>
-                  )}
-                </div>
-              </div>
+                {item.ctaText && (
+                  <div className="flex flex-col gap-2 pt-4 border-t border-[#16181f]">
+                    <span className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
+                      Call to Action
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="px-3 py-1 text-xs font-sans font-medium bg-[#12151b] text-[#f3f4f6] border border-[#20242e]">
+                        {item.ctaText}
+                      </span>
+                      {item.destinationUrl && (
+                        <a
+                          href={item.destinationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-sans text-[#9da2ad] hover:text-[#e07945] transition-colors truncate max-w-[220px]"
+                        >
+                          {item.destinationUrl}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Observation Timestamps */}

@@ -12,11 +12,7 @@ import {
   getPrimaryMedia,
 } from "../../ad-library/utils";
 import type { DiscoverLayoutRole } from "../utils/cluster-rhythm";
-import {
-  getActiveDcoVariationState,
-  getNextCardIndex,
-  getPrevCardIndex,
-} from "../utils/dco-traversal";
+import { PsyenceMosaic } from "./psyence-mosaic";
 import {
   notifyDiscoverVideoPlay,
   subscribeDiscoverVideoPlay,
@@ -36,46 +32,24 @@ export function CreativeCard({
   const hasMultipleVariations = variationCount > 1;
   const isDco = item.displayFormat === "DCO" || hasMultipleVariations;
 
-  const [activeVariationIndex, setActiveVariationIndex] = useState(0);
-  const [isTraversing, setIsTraversing] = useState(false);
+  const [hoveredVariationIndex, setHoveredVariationIndex] = useState<number | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Synchronized DCO variation state or base item state
-  const activeDcoState = isDco
-    ? getActiveDcoVariationState(
-        variations,
-        activeVariationIndex,
-        item.headline,
-        item.primaryText,
-        item.ctaText,
-      )
-    : null;
+  // Synchronized active variation state (scrub on hover/focus) or base item state
+  const activeVariation =
+    hasMultipleVariations && hoveredVariationIndex !== null && variations[hoveredVariationIndex]
+      ? variations[hoveredVariationIndex]
+      : hasMultipleVariations && variations.length > 0
+        ? variations[0]
+        : null;
 
-  // Active variation media or primary item media
+  // Single creative media assets for non-mosaic items
   let currentVideo: AdLibraryMediaItem | undefined;
   let currentPreview: AdLibraryMediaItem | undefined;
   let currentDisplayMedia: AdLibraryMediaItem | undefined;
 
-  if (isDco && activeDcoState?.variation) {
-    const variation = activeDcoState.variation;
-    const variationVideo = variation.media.find(
-      (m: AdLibraryMediaItem) => m.mediaType === "VIDEO",
-    );
-    const variationPreview = variation.media.find(
-      (m: AdLibraryMediaItem) => m.role === "preview",
-    );
-    const variationImage = variation.media.find(
-      (m: AdLibraryMediaItem) => m.role !== "preview",
-    );
-
-    if (variationVideo) {
-      currentVideo = variationVideo;
-      currentPreview = variationPreview;
-    } else {
-      currentDisplayMedia = variationImage ?? variation.media[0];
-    }
-  } else {
+  if (!hasMultipleVariations) {
     const primary = getPrimaryMedia(item);
     currentVideo = primary.video;
     currentPreview = primary.preview;
@@ -83,8 +57,8 @@ export function CreativeCard({
   }
 
   const isVideo =
-    (isDco && currentVideo !== undefined) ||
-    (!isDco && (item.displayFormat === "VIDEO" || currentVideo !== undefined));
+    !hasMultipleVariations &&
+    (item.displayFormat === "VIDEO" || currentVideo !== undefined);
 
   const isLead = layoutRole === "lead";
   const isWide = layoutRole === "wide";
@@ -108,20 +82,6 @@ export function CreativeCard({
   const handlePlayVideo = () => {
     setIsPlaying(true);
     notifyDiscoverVideoPlay(item.id);
-  };
-
-  const handleNextVariation = () => {
-    setIsPlaying(false);
-    setActiveVariationIndex((prev) => getNextCardIndex(prev, variationCount));
-  };
-
-  const handlePrevVariation = () => {
-    setIsPlaying(false);
-    setActiveVariationIndex((prev) => getPrevCardIndex(prev, variationCount));
-  };
-
-  const handleActivateTraversal = () => {
-    setIsTraversing(true);
   };
 
   // Height configurations by presentation role (controlled growth for desktop research density)
@@ -148,13 +108,13 @@ export function CreativeCard({
         : "line-clamp-2 max-w-lg text-xs sm:text-sm leading-relaxed";
 
   const displayedHeadline = isDco
-    ? activeDcoState?.headline ?? item.headline
+    ? activeVariation?.headline ?? item.headline
     : item.headline;
   const displayedCopy = isDco
-    ? activeDcoState?.body ?? item.primaryText
+    ? activeVariation?.body ?? item.primaryText
     : item.primaryText;
   const displayedCta = isDco
-    ? activeDcoState?.ctaText ?? item.ctaText
+    ? activeVariation?.ctaText ?? item.ctaText
     : item.ctaText;
 
   return (
@@ -164,7 +124,7 @@ export function CreativeCard({
         isWide ? "lg:grid lg:grid-cols-12 lg:gap-8 xl:gap-12 2xl:gap-16 lg:items-center" : ""
       }`}
     >
-      {/* 1. Primary Creative Object (Dominant Hero / Mounted Artifact) */}
+      {/* 1. Primary Creative Object (Dominant Hero / Mounted Psyence Artifact) */}
       <div className={`relative w-full ${isWide ? "lg:col-span-7 2xl:col-span-8" : ""}`}>
         {/* Restrained DCO Plurality Cue (Stepped Card Backing) */}
         {hasMultipleVariations && (
@@ -177,7 +137,15 @@ export function CreativeCard({
         <div
           className={`artifact-media-frame relative w-full bg-[#030406] border border-[#161820] flex items-center justify-center overflow-hidden ${mediaHeightClass}`}
         >
-          {isVideo && currentVideo ? (
+          {/* Psyence Dynamic Creative Mosaic (when variations > 1) */}
+          {hasMultipleVariations ? (
+            <PsyenceMosaic
+              variations={variations}
+              selectedIndex={hoveredVariationIndex ?? undefined}
+              onHoverVariation={setHoveredVariationIndex}
+              maxVisible={4}
+            />
+          ) : isVideo && currentVideo ? (
             <div className="relative w-full h-full flex items-center justify-center">
               {isPlaying ? (
                 <video
@@ -238,44 +206,6 @@ export function CreativeCard({
           ) : (
             <div className="w-full h-64 flex items-center justify-center font-mono text-xs text-[#686e7b]">
               Creative Media
-            </div>
-          )}
-
-          {/* DCO Traversal Controls & Positional Indicator (only when multiple distinct variations exist) */}
-          {hasMultipleVariations && (
-            <div className="absolute bottom-3 right-3 z-10 flex items-center">
-              {!isTraversing ? (
-                <button
-                  type="button"
-                  aria-label={`Traverse ${variationCount} variations, current variation 1`}
-                  onClick={handleActivateTraversal}
-                  className="font-mono text-xs text-[#8e95a2] hover:text-[#f3f4f6] bg-[#07080a]/90 border border-[#20242e] hover:border-[#3a4154] px-2 py-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100 transition-opacity"
-                >
-                  1 / {variationCount}
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5 bg-[#07080a]/95 border border-[#20242e] px-2 py-1">
-                  <button
-                    type="button"
-                    aria-label="Previous variation"
-                    onClick={handlePrevVariation}
-                    className="text-xs font-mono text-[#8e95a2] hover:text-[#f3f4f6] px-1 transition-colors"
-                  >
-                    ←
-                  </button>
-                  <span className="text-xs font-mono text-[#f3f4f6] tabular-nums px-0.5">
-                    {activeVariationIndex + 1} / {variationCount}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Next variation"
-                    onClick={handleNextVariation}
-                    className="text-xs font-mono text-[#8e95a2] hover:text-[#f3f4f6] px-1 transition-colors"
-                  >
-                    →
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -340,7 +270,7 @@ export function CreativeCard({
           </p>
         )}
 
-        {/* Action Link & Optional Active Variation CTA */}
+        {/* Action Link & Optional Synchronized Variation CTA */}
         <div className="pt-2 flex items-center justify-between">
           <Link
             href={`/ads/${item.id}`}
@@ -350,7 +280,7 @@ export function CreativeCard({
             <span aria-hidden="true">→</span>
           </Link>
 
-          {isTraversing && displayedCta && (
+          {displayedCta && (
             <span className="font-mono text-xs text-[#8e95a2] border border-[#1a1d25] bg-[#0c0e13] px-2 py-0.5">
               {displayedCta}
             </span>
