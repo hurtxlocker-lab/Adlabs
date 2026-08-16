@@ -34,7 +34,7 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
     <div className="flex flex-col gap-3">
       <div className="relative w-full bg-[#030406] border border-[#161820] flex items-center justify-center min-h-[420px] sm:min-h-[560px] max-h-[760px] overflow-hidden">
         {isVideo && currentVideo ? (
-          <div className="relative w-full h-full flex items-center justify-center">
+          <div className="absolute inset-0 w-full h-full flex items-center justify-center">
             {isPlaying ? (
               <video
                 src={currentVideo.mediaUrl}
@@ -43,7 +43,7 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
                 controls
                 autoPlay
                 playsInline
-                className="w-full h-full max-h-[760px] object-contain"
+                className="w-full h-full max-w-full max-h-full object-contain object-center"
               />
             ) : (
               <div className="relative w-full h-full flex items-center justify-center">
@@ -52,7 +52,7 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
                   <img
                     src={currentPreview.mediaUrl}
                     alt={item.headline || item.brand.name}
-                    className="dco-card-crossfade w-full h-full max-h-[760px] object-contain"
+                    className="dco-card-crossfade w-full h-full max-w-full max-h-full object-contain object-center"
                   />
                 ) : (
                   <div className="w-full h-96 flex items-center justify-center text-[#686e7b] font-sans text-xs">
@@ -81,12 +81,14 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
             )}
           </div>
         ) : currentDisplayMedia ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentDisplayMedia.mediaUrl}
-            alt={item.headline || item.brand.name}
-            className="dco-card-crossfade w-full h-full max-h-[760px] object-contain"
-          />
+          <div className="absolute inset-0 w-full h-full flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={currentDisplayMedia.mediaUrl}
+              alt={item.headline || item.brand.name}
+              className="dco-card-crossfade w-full h-full max-w-full max-h-full object-contain object-center"
+            />
+          </div>
         ) : (
           <div className="w-full h-96 flex items-center justify-center text-[#686e7b] font-sans text-xs">
             Creative Media

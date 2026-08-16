@@ -102,27 +102,29 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
 
                         {/* Media Mount */}
                         <div className="relative w-full bg-[#030406] border border-[#161820] flex items-center justify-center min-h-[380px] sm:min-h-[460px] max-h-[660px] overflow-hidden">
-                          {isVideo && variationPrimaryMedia ? (
-                            <video
-                              src={variationPrimaryMedia.mediaUrl}
-                              poster={variationPreview?.mediaUrl}
-                              preload="none"
-                              controls
-                              playsInline
-                              className="w-full h-full max-h-[660px] object-contain"
-                            />
-                          ) : variationPrimaryMedia ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={variationPrimaryMedia.mediaUrl}
-                              alt={variation.headline || `Variation ${idx + 1}`}
-                              className="w-full h-full max-h-[660px] object-contain"
-                            />
-                          ) : (
-                            <span className="font-mono text-xs text-[#686e7b]">
-                              Variation Asset
-                            </span>
-                          )}
+                          <div className="absolute inset-0 w-full h-full flex items-center justify-center">
+                            {isVideo && variationPrimaryMedia ? (
+                              <video
+                                src={variationPrimaryMedia.mediaUrl}
+                                poster={variationPreview?.mediaUrl}
+                                preload="none"
+                                controls
+                                playsInline
+                                className="w-full h-full max-w-full max-h-full object-contain object-center"
+                              />
+                            ) : variationPrimaryMedia ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={variationPrimaryMedia.mediaUrl}
+                                alt={variation.headline || `Variation ${idx + 1}`}
+                                className="w-full h-full max-w-full max-h-full object-contain object-center"
+                              />
+                            ) : (
+                              <span className="font-mono text-xs text-[#686e7b]">
+                                Variation Asset
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Variation Copy Deck */}

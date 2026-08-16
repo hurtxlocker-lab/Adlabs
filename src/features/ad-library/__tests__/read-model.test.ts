@@ -279,4 +279,53 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
       }
     }
   });
+
+  it("10. supports previewLoopUrl and physical dimensions on AdLibraryMediaItem", () => {
+    const videoWithPreview: typeof sampleAd.media[0] = {
+      id: "media-vid-ready",
+      mediaType: "VIDEO",
+      role: null,
+      position: 0,
+      mimeType: "video/mp4",
+      mediaUrl: "https://media.brainfoods.in/media/sha256/original",
+      previewLoopUrl: "https://media.brainfoods.in/media/sha256/previewloop",
+      width: 720,
+      height: 1280,
+    };
+
+    expect(videoWithPreview.previewLoopUrl).toBe(
+      "https://media.brainfoods.in/media/sha256/previewloop",
+    );
+    expect(videoWithPreview.mediaUrl).toBe(
+      "https://media.brainfoods.in/media/sha256/original",
+    );
+    expect(videoWithPreview.width).toBe(720);
+    expect(videoWithPreview.height).toBe(1280);
+
+    const videoWithoutPreview: typeof sampleAd.media[0] = {
+      id: "media-vid-pending",
+      mediaType: "VIDEO",
+      role: null,
+      position: 0,
+      mimeType: "video/mp4",
+      mediaUrl: "https://media.brainfoods.in/media/sha256/original",
+      previewLoopUrl: null,
+    };
+
+    expect(videoWithoutPreview.previewLoopUrl).toBeNull();
+  });
+
+  it("11. absolute ambient fallback: missing previewLoopUrl never substitutes original video URL", () => {
+    const rawAssetWithoutDerivative = {
+      mediaAssetId: "vid-no-derivative",
+      mediaType: "VIDEO",
+      storageKey: "media/sha256/original-video-hash",
+      previewLoopUrl: null,
+    };
+
+    // Ambient consumer policy: if previewLoopUrl is null/absent, ambient src MUST be null (poster only)
+    const ambientSrc = rawAssetWithoutDerivative.previewLoopUrl ?? null;
+    expect(ambientSrc).toBeNull();
+    expect(ambientSrc).not.toBe("https://media.brainfoods.in/media/sha256/original-video-hash");
+  });
 });

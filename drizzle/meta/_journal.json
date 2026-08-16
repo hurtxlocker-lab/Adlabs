@@ -8,6 +8,20 @@
       "when": 1786729956888,
       "tag": "0000_tough_doctor_octopus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786895795129,
+      "tag": "0001_shiny_epoch",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786896266630,
+      "tag": "0002_right_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

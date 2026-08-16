@@ -1,7 +1,8 @@
-import { bigint, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { adMedia } from "./ad-media";
 import { cardMedia } from "./card-media";
+import { mediaDerivatives } from "./media-derivatives";
 
 export const mediaAssets = pgTable(
   "media_assets",
@@ -14,6 +15,10 @@ export const mediaAssets = pgTable(
     mimeType: text("mime_type"),
     byteSize: bigint("byte_size", { mode: "bigint" }),
     sha256: text("sha256").unique(),
+    width: integer("width"),
+    height: integer("height"),
+    durationMs: integer("duration_ms"),
+    hasAudio: boolean("has_audio"),
     downloadStatus: text("download_status").notNull().default("PENDING"),
     downloadError: text("download_error"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -32,4 +37,6 @@ export const mediaAssets = pgTable(
 export const mediaAssetsRelations = relations(mediaAssets, ({ many }) => ({
   adMedia: many(adMedia),
   cardMedia: many(cardMedia),
+  derivatives: many(mediaDerivatives, { relationName: "sourceMediaDerivatives" }),
+  derivedFrom: many(mediaDerivatives, { relationName: "derivedFromMediaDerivatives" }),
 }));

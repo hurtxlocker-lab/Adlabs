@@ -12,6 +12,9 @@ export interface AdLibraryMediaItem {
   position: number;
   mimeType: string | null;
   mediaUrl: string;
+  previewLoopUrl?: string | null;
+  width?: number | null;
+  height?: number | null;
 }
 
 export interface AdLibraryCardItem {

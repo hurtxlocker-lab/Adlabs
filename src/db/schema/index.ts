@@ -11,6 +11,7 @@ export * from "./raw-ingestion-items";
 export * from "./ads";
 export * from "./ad-cards";
 export * from "./media-assets";
+export * from "./media-derivatives";
 export * from "./ad-media";
 export * from "./card-media";
 export * from "./ad-observations";

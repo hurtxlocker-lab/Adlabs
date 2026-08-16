@@ -8,6 +8,7 @@ import {
   adCards,
   cardMedia,
   mediaAssets,
+  mediaDerivatives,
 } from "@/db/schema";
 import { resolveMediaUrl } from "@/storage";
 import { eq, inArray, desc, and, or, ilike } from "drizzle-orm";
@@ -18,6 +19,45 @@ import type {
   AdLibraryQueryParams,
 } from "./types";
 import { resolveCreativeVariations, sanitizeDisplayCopy } from "./utils";
+
+/**
+ * Resolves READY PREVIEW_LOOP preview-loop-v1 derivative URLs for a set of source media asset IDs.
+ */
+async function resolvePreviewLoopUrls(
+  sourceMediaAssetIds: string[],
+): Promise<Map<string, string>> {
+  if (sourceMediaAssetIds.length === 0) return new Map();
+
+  const derivativeRows = await db
+    .select({
+      sourceMediaAssetId: mediaDerivatives.sourceMediaAssetId,
+      storageKey: mediaAssets.storageKey,
+    })
+    .from(mediaDerivatives)
+    .innerJoin(
+      mediaAssets,
+      eq(mediaDerivatives.derivedMediaAssetId, mediaAssets.id),
+    )
+    .where(
+      and(
+        inArray(mediaDerivatives.sourceMediaAssetId, sourceMediaAssetIds),
+        eq(mediaDerivatives.derivativeKind, "PREVIEW_LOOP"),
+        eq(mediaDerivatives.recipeVersion, "preview-loop-v1"),
+        eq(mediaDerivatives.status, "READY"),
+      ),
+    );
+
+  const previewMap = new Map<string, string>();
+  for (const row of derivativeRows) {
+    if (!row.storageKey) continue;
+    try {
+      previewMap.set(row.sourceMediaAssetId, resolveMediaUrl(row.storageKey));
+    } catch {
+      // Ignore resolution failure on malformed key
+    }
+  }
+  return previewMap;
+}
 
 /**
  * Retrieves factual ad library items for Discover surfaces.
@@ -110,37 +150,13 @@ export async function getAdLibraryItems(
       position: adMedia.position,
       storageKey: mediaAssets.storageKey,
       mimeType: mediaAssets.mimeType,
+      width: mediaAssets.width,
+      height: mediaAssets.height,
     })
     .from(adMedia)
     .innerJoin(mediaAssets, eq(adMedia.mediaAssetId, mediaAssets.id))
     .where(inArray(adMedia.adId, adIds))
     .orderBy(adMedia.position);
-
-  // Group direct media by adId
-  const directMediaByAdId = new Map<string, AdLibraryMediaItem[]>();
-
-  for (const m of mediaRows) {
-    if (!m.storageKey) continue;
-    let mediaUrl: string;
-    try {
-      mediaUrl = resolveMediaUrl(m.storageKey);
-    } catch {
-      continue;
-    }
-
-    const mediaItem: AdLibraryMediaItem = {
-      id: m.mediaAssetId,
-      mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
-      role: m.role,
-      position: m.position,
-      mimeType: m.mimeType,
-      mediaUrl,
-    };
-
-    const list = directMediaByAdId.get(m.adId) ?? [];
-    list.push(mediaItem);
-    directMediaByAdId.set(m.adId, list);
-  }
 
   // 3. Fetch cards and card media for DCO / carousel ads
   const cardRows = await db
@@ -169,6 +185,8 @@ export async function getAdLibraryItems(
     position: number;
     storageKey: string | null;
     mimeType: string | null;
+    width: number | null;
+    height: number | null;
   }[] = [];
 
   if (cardIds.length > 0) {
@@ -181,11 +199,56 @@ export async function getAdLibraryItems(
         position: cardMedia.position,
         storageKey: mediaAssets.storageKey,
         mimeType: mediaAssets.mimeType,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
       })
       .from(cardMedia)
       .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
       .where(inArray(cardMedia.adCardId, cardIds))
       .orderBy(cardMedia.position);
+  }
+
+  // Collect all unique video source media asset IDs to resolve derivatives
+  const allVideoSourceAssetIds = Array.from(
+    new Set(
+      [...mediaRows, ...cardMediaRows]
+        .filter((m) => m.mediaType === "VIDEO")
+        .map((m) => m.mediaAssetId),
+    ),
+  );
+
+  const previewLoopMap = await resolvePreviewLoopUrls(allVideoSourceAssetIds);
+
+  // Group direct media by adId
+  const directMediaByAdId = new Map<string, AdLibraryMediaItem[]>();
+
+  for (const m of mediaRows) {
+    if (!m.storageKey) continue;
+    let mediaUrl: string;
+    try {
+      mediaUrl = resolveMediaUrl(m.storageKey);
+    } catch {
+      continue;
+    }
+
+    const previewLoopUrl =
+      m.mediaType === "VIDEO" ? previewLoopMap.get(m.mediaAssetId) ?? null : null;
+
+    const mediaItem: AdLibraryMediaItem = {
+      id: m.mediaAssetId,
+      mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
+      role: m.role,
+      position: m.position,
+      mimeType: m.mimeType,
+      mediaUrl,
+      previewLoopUrl,
+      width: m.width,
+      height: m.height,
+    };
+
+    const list = directMediaByAdId.get(m.adId) ?? [];
+    list.push(mediaItem);
+    directMediaByAdId.set(m.adId, list);
   }
 
   // Group card media by adCardId
@@ -199,6 +262,9 @@ export async function getAdLibraryItems(
       continue;
     }
 
+    const previewLoopUrl =
+      cm.mediaType === "VIDEO" ? previewLoopMap.get(cm.mediaAssetId) ?? null : null;
+
     const mediaItem: AdLibraryMediaItem = {
       id: cm.mediaAssetId,
       mediaType: (cm.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
@@ -206,6 +272,9 @@ export async function getAdLibraryItems(
       position: cm.position,
       mimeType: cm.mimeType,
       mediaUrl,
+      previewLoopUrl,
+      width: cm.width,
+      height: cm.height,
     };
 
     const list = mediaByCardId.get(cm.adCardId) ?? [];
@@ -238,51 +307,22 @@ export async function getAdLibraryItems(
   const items: AdLibraryItem[] = [];
 
   for (const row of adRows) {
-    const directMedia = directMediaByAdId.get(row.id) ?? [];
+    const media = directMediaByAdId.get(row.id) ?? [];
     const sourceCards = cardsByAdId.get(row.id) ?? [];
+
+    // Factual copy resolution fallback:
+    // If ad top-level headline/body is empty (common for DCO/carousels),
+    // derive displayed headline/body from Card 0 to ensure presentation integrity.
+    const card0 = sourceCards.length > 0 ? sourceCards[0] : undefined;
+    const headline = sanitizeDisplayCopy(row.headline) || (card0?.headline ?? null);
+    const primaryText = sanitizeDisplayCopy(row.primaryText) || (card0?.body ?? null);
+    const description = sanitizeDisplayCopy(row.description) || (card0?.description ?? null);
+    const ctaText = row.ctaText ?? (card0?.ctaText ?? null);
+    const ctaType = row.ctaType ?? (card0?.ctaType ?? null);
+    const destinationUrl = row.destinationUrl ?? (card0?.destinationUrl ?? null);
+
+    // Resolve deduped product-facing creative variations from raw source cards
     const variations = resolveCreativeVariations(sourceCards);
-
-    // Media list: if direct media is present, use it; otherwise, flatten unique variation media
-    let media: AdLibraryMediaItem[];
-    if (directMedia.length > 0) {
-      media = directMedia;
-    } else {
-      const seenAssetIds = new Set<string>();
-      media = [];
-      for (const v of variations) {
-        for (const m of v.media) {
-          if (!seenAssetIds.has(m.id)) {
-            seenAssetIds.add(m.id);
-            media.push(m);
-          }
-        }
-      }
-    }
-
-    if (media.length === 0) continue; // Require canonical media for discoverable atlas items
-
-    // Display copy resolution:
-    // 1. Sanitize ad-level fields to reject raw {{...}} template tokens
-    // 2. If ad-level field is a template token or null, fall back to first concrete variation field
-    let headline = sanitizeDisplayCopy(row.headline);
-    if (!headline && variations.length > 0) {
-      headline = variations.find((v) => v.headline !== null)?.headline ?? null;
-    }
-
-    let primaryText = sanitizeDisplayCopy(row.primaryText);
-    if (!primaryText && variations.length > 0) {
-      primaryText = variations.find((v) => v.body !== null)?.body ?? null;
-    }
-
-    let description = sanitizeDisplayCopy(row.description);
-    if (!description && variations.length > 0) {
-      description = variations.find((v) => v.description !== null)?.description ?? null;
-    }
-
-    const ctaText = row.ctaText ?? (variations.length > 0 ? variations[0].ctaText : null);
-    const ctaType = row.ctaType ?? (variations.length > 0 ? variations[0].ctaType : null);
-    const destinationUrl =
-      row.destinationUrl ?? (variations.length > 0 ? variations[0].destinationUrl : null);
 
     items.push({
       id: row.id,
@@ -352,7 +392,7 @@ export async function getAdLibraryItemById(
     return null;
   }
 
-  const row = adRows[0];
+  const row = adRows[0]!;
 
   // Direct media
   const mediaRows = await db
@@ -363,29 +403,13 @@ export async function getAdLibraryItemById(
       position: adMedia.position,
       storageKey: mediaAssets.storageKey,
       mimeType: mediaAssets.mimeType,
+      width: mediaAssets.width,
+      height: mediaAssets.height,
     })
     .from(adMedia)
     .innerJoin(mediaAssets, eq(adMedia.mediaAssetId, mediaAssets.id))
     .where(eq(adMedia.adId, id))
     .orderBy(adMedia.position);
-
-  const directMedia: AdLibraryMediaItem[] = [];
-  for (const m of mediaRows) {
-    if (!m.storageKey) continue;
-    try {
-      const mediaUrl = resolveMediaUrl(m.storageKey);
-      directMedia.push({
-        id: m.mediaAssetId,
-        mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
-        role: m.role,
-        position: m.position,
-        mimeType: m.mimeType,
-        mediaUrl,
-      });
-    } catch {
-      continue;
-    }
-  }
 
   // Cards
   const cardRows = await db
@@ -413,6 +437,8 @@ export async function getAdLibraryItemById(
     position: number;
     storageKey: string | null;
     mimeType: string | null;
+    width: number | null;
+    height: number | null;
   }[] = [];
 
   if (cardIds.length > 0) {
@@ -425,6 +451,8 @@ export async function getAdLibraryItemById(
         position: cardMedia.position,
         storageKey: mediaAssets.storageKey,
         mimeType: mediaAssets.mimeType,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
       })
       .from(cardMedia)
       .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
@@ -432,11 +460,49 @@ export async function getAdLibraryItemById(
       .orderBy(cardMedia.position);
   }
 
+  // Collect video source IDs
+  const allVideoSourceAssetIds = Array.from(
+    new Set(
+      [...mediaRows, ...cardMediaRows]
+        .filter((m) => m.mediaType === "VIDEO")
+        .map((m) => m.mediaAssetId),
+    ),
+  );
+
+  const previewLoopMap = await resolvePreviewLoopUrls(allVideoSourceAssetIds);
+
+  const directMedia: AdLibraryMediaItem[] = [];
+  for (const m of mediaRows) {
+    if (!m.storageKey) continue;
+    try {
+      const mediaUrl = resolveMediaUrl(m.storageKey);
+      const previewLoopUrl =
+        m.mediaType === "VIDEO" ? previewLoopMap.get(m.mediaAssetId) ?? null : null;
+
+      directMedia.push({
+        id: m.mediaAssetId,
+        mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
+        role: m.role,
+        position: m.position,
+        mimeType: m.mimeType,
+        mediaUrl,
+        previewLoopUrl,
+        width: m.width,
+        height: m.height,
+      });
+    } catch {
+      continue;
+    }
+  }
+
   const mediaByCardId = new Map<string, AdLibraryMediaItem[]>();
   for (const cm of cardMediaRows) {
     if (!cm.storageKey) continue;
     try {
       const mediaUrl = resolveMediaUrl(cm.storageKey);
+      const previewLoopUrl =
+        cm.mediaType === "VIDEO" ? previewLoopMap.get(cm.mediaAssetId) ?? null : null;
+
       const mediaItem: AdLibraryMediaItem = {
         id: cm.mediaAssetId,
         mediaType: (cm.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
@@ -444,6 +510,9 @@ export async function getAdLibraryItemById(
         position: cm.position,
         mimeType: cm.mimeType,
         mediaUrl,
+        previewLoopUrl,
+        width: cm.width,
+        height: cm.height,
       };
       const list = mediaByCardId.get(cm.adCardId) ?? [];
       list.push(mediaItem);
@@ -465,44 +534,15 @@ export async function getAdLibraryItemById(
     media: mediaByCardId.get(cr.cardId) ?? [],
   }));
 
+  const card0 = sourceCards.length > 0 ? sourceCards[0] : undefined;
+  const headline = sanitizeDisplayCopy(row.headline) || (card0?.headline ?? null);
+  const primaryText = sanitizeDisplayCopy(row.primaryText) || (card0?.body ?? null);
+  const description = sanitizeDisplayCopy(row.description) || (card0?.description ?? null);
+  const ctaText = row.ctaText ?? (card0?.ctaText ?? null);
+  const ctaType = row.ctaType ?? (card0?.ctaType ?? null);
+  const destinationUrl = row.destinationUrl ?? (card0?.destinationUrl ?? null);
+
   const variations = resolveCreativeVariations(sourceCards);
-
-  // Resolve media list
-  let media: AdLibraryMediaItem[];
-  if (directMedia.length > 0) {
-    media = directMedia;
-  } else {
-    const seenAssetIds = new Set<string>();
-    media = [];
-    for (const v of variations) {
-      for (const m of v.media) {
-        if (!seenAssetIds.has(m.id)) {
-          seenAssetIds.add(m.id);
-          media.push(m);
-        }
-      }
-    }
-  }
-
-  let headline = sanitizeDisplayCopy(row.headline);
-  if (!headline && variations.length > 0) {
-    headline = variations.find((v) => v.headline !== null)?.headline ?? null;
-  }
-
-  let primaryText = sanitizeDisplayCopy(row.primaryText);
-  if (!primaryText && variations.length > 0) {
-    primaryText = variations.find((v) => v.body !== null)?.body ?? null;
-  }
-
-  let description = sanitizeDisplayCopy(row.description);
-  if (!description && variations.length > 0) {
-    description = variations.find((v) => v.description !== null)?.description ?? null;
-  }
-
-  const ctaText = row.ctaText ?? (variations.length > 0 ? variations[0].ctaText : null);
-  const ctaType = row.ctaType ?? (variations.length > 0 ? variations[0].ctaType : null);
-  const destinationUrl =
-    row.destinationUrl ?? (variations.length > 0 ? variations[0].destinationUrl : null);
 
   return {
     id: row.id,
@@ -525,7 +565,7 @@ export async function getAdLibraryItemById(
     firstSeenAt: row.firstSeenAt,
     lastSeenAt: row.lastSeenAt,
     adLibraryUrl: row.adLibraryUrl,
-    media,
+    media: directMedia,
     sourceCards,
     variations,
     cards: sourceCards,

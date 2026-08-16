@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type {
   AdLibraryItem,
   AdLibraryMediaItem,
@@ -13,19 +13,18 @@ import {
 } from "../../ad-library/utils";
 import type { DiscoverLayoutRole } from "../utils/cluster-rhythm";
 import { PsyenceMosaic } from "./psyence-mosaic";
-import {
-  notifyDiscoverVideoPlay,
-  subscribeDiscoverVideoPlay,
-} from "../utils/video-coordinator";
+import { AmbientVideoPreview } from "./ambient-video-preview";
 
 interface CreativeCardProps {
   item: AdLibraryItem;
   layoutRole?: DiscoverLayoutRole;
+  clusterId?: string;
 }
 
 export function CreativeCard({
   item,
   layoutRole = "supporting",
+  clusterId,
 }: CreativeCardProps) {
   const variations = item.variations ?? [];
   const variationCount = variations.length;
@@ -33,8 +32,6 @@ export function CreativeCard({
   const isDco = item.displayFormat === "DCO" || hasMultipleVariations;
 
   const [hoveredVariationIndex, setHoveredVariationIndex] = useState<number | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Synchronized active variation state (scrub on hover/focus) or base item state
   const activeVariation =
@@ -68,21 +65,6 @@ export function CreativeCard({
     item.displayFormat,
     variationCount,
   );
-
-  // Discover single-video playback coordination
-  useEffect(() => {
-    if (!isPlaying) return;
-    return subscribeDiscoverVideoPlay(item.id, () => {
-      if (videoRef.current && !videoRef.current.paused) {
-        videoRef.current.pause();
-      }
-    });
-  }, [isPlaying, item.id]);
-
-  const handlePlayVideo = () => {
-    setIsPlaying(true);
-    notifyDiscoverVideoPlay(item.id);
-  };
 
   // Height configurations by presentation role (controlled growth for desktop research density)
   const mediaHeightClass = isLead
@@ -146,63 +128,26 @@ export function CreativeCard({
               maxVisible={4}
             />
           ) : isVideo && currentVideo ? (
-            <div className="relative w-full h-full flex items-center justify-center">
-              {isPlaying ? (
-                <video
-                  ref={videoRef}
-                  src={currentVideo.mediaUrl}
-                  poster={currentPreview?.mediaUrl}
-                  preload="none"
-                  controls
-                  autoPlay
-                  playsInline
-                  onPlay={() => notifyDiscoverVideoPlay(item.id)}
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <div className="relative w-full h-full flex items-center justify-center">
-                  {currentPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={currentPreview.mediaUrl}
-                      alt={displayedHeadline || item.brand.name}
-                      loading="lazy"
-                      className="dco-card-crossfade w-full h-full object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-64 flex items-center justify-center font-mono text-xs text-[#686e7b]">
-                      Video Creative
-                    </div>
-                  )}
-
-                  {/* Explicit Play Trigger */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-                    <button
-                      type="button"
-                      aria-label={`Play video for ${displayedHeadline || item.brand.name}`}
-                      onClick={handlePlayVideo}
-                      className="w-11 h-11 rounded-full bg-[#07080a]/90 border border-[#20242e] hover:border-[#3a4154] focus-visible:border-[#d46b38] text-[#f3f4f6] hover:text-white flex items-center justify-center transition-colors"
-                    >
-                      <svg
-                        className="w-4 h-4 text-current ml-0.5"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : currentDisplayMedia ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={currentDisplayMedia.mediaUrl}
-              alt={displayedHeadline || item.brand.name}
-              loading="lazy"
-              className="dco-card-crossfade w-full h-full object-contain"
+            /* Ambient Video Preview for Single Video Creatives */
+            <AmbientVideoPreview
+              id={item.id}
+              clusterId={clusterId}
+              originalVideoUrl={currentVideo.mediaUrl}
+              previewLoopUrl={currentVideo.previewLoopUrl}
+              posterUrl={currentPreview?.mediaUrl}
+              title={displayedHeadline || item.brand.name}
+              isLead={isLead}
             />
+          ) : currentDisplayMedia ? (
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={currentDisplayMedia.mediaUrl}
+                alt={displayedHeadline || item.brand.name}
+                loading="lazy"
+                className="dco-card-crossfade w-full h-full max-w-full max-h-full object-contain object-center"
+              />
+            </div>
           ) : (
             <div className="w-full h-64 flex items-center justify-center font-mono text-xs text-[#686e7b]">
               Creative Media

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ObjectStorageError } from "../errors";
-import { getDeterministicStorageKey } from "../storage-key";
+import {
+  getDeterministicStorageKey,
+  isCanonicalMediaStorageKey,
+} from "../storage-key";
 
 describe("Storage Key Pure Tests (True SHA-Addressed Object Identity)", () => {
   const sampleSha =
@@ -57,5 +60,54 @@ describe("Storage Key Pure Tests (True SHA-Addressed Object Identity)", () => {
         "../8bac4800c6273bccf86e4e4275c1553fd58821a0a0dc19f595c95ff599374f59",
       ),
     ).toThrow(ObjectStorageError);
+  });
+
+  it("5. isCanonicalMediaStorageKey validates exact canonical storage keys", () => {
+    // Valid lowercase hex SHA path
+    expect(isCanonicalMediaStorageKey(`media/sha256/${sampleSha}`)).toBe(true);
+    expect(
+      isCanonicalMediaStorageKey(
+        "media/sha256/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      ),
+    ).toBe(true);
+
+    // Uppercase rejected
+    expect(
+      isCanonicalMediaStorageKey(
+        "media/sha256/8BAC4800C6273BCCF86E4E4275C1553FD58821A0A0DC19F595C95FF599374F59",
+      ),
+    ).toBe(false);
+
+    // 63 chars (too short)
+    expect(
+      isCanonicalMediaStorageKey(
+        "media/sha256/8bac4800c6273bccf86e4e4275c1553fd58821a0a0dc19f595c95ff599374f5",
+      ),
+    ).toBe(false);
+
+    // 65 chars (too long)
+    expect(
+      isCanonicalMediaStorageKey(
+        "media/sha256/8bac4800c6273bccf86e4e4275c1553fd58821a0a0dc19f595c95ff599374f59a",
+      ),
+    ).toBe(false);
+
+    // Non-hex characters
+    expect(
+      isCanonicalMediaStorageKey(
+        "media/sha256/8bac4800c6273bccf86e4e4275c1553fd58821a0a0dc19f595c95ff599374fzz",
+      ),
+    ).toBe(false);
+
+    // Unknown / legacy paths
+    expect(isCanonicalMediaStorageKey("media/unknown/e5e5.bin")).toBe(false);
+    expect(isCanonicalMediaStorageKey("ads/123/video.mp4")).toBe(false);
+    expect(isCanonicalMediaStorageKey("preview/abc.jpg")).toBe(false);
+
+    // Empty / null / undefined / whitespace
+    expect(isCanonicalMediaStorageKey("")).toBe(false);
+    expect(isCanonicalMediaStorageKey(null)).toBe(false);
+    expect(isCanonicalMediaStorageKey(undefined)).toBe(false);
+    expect(isCanonicalMediaStorageKey("   ")).toBe(false);
   });
 });

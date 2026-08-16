@@ -74,7 +74,7 @@ function PsyenceTile({
           src={mediaUrl}
           alt={variation.headline || `Variation ${position}`}
           loading="lazy"
-          className="w-full h-full object-contain pointer-events-none select-none"
+          className="w-full h-full max-w-full max-h-full object-contain object-center pointer-events-none select-none"
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center font-mono text-[11px] text-[#686e7b]">
@@ -130,7 +130,7 @@ export function PsyenceMosaic({
   }
 
   return (
-    <div data-psyence-mosaic className="w-full h-full relative">
+    <div data-psyence-mosaic className="absolute inset-0 w-full h-full">
       {/* 2-Variation Asymmetric Duo (~62% Left Anchor, ~38% Right) */}
       {layoutType === "duo" && (
         <div className="grid grid-cols-12 w-full h-full">

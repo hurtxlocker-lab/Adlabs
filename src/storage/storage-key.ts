@@ -1,6 +1,21 @@
 import { ObjectStorageError } from "./errors";
 
 const SHA256_HEX_REGEX = /^[0-9a-f]{64}$/;
+export const CANONICAL_STORAGE_KEY_REGEX = /^media\/sha256\/[0-9a-f]{64}$/;
+
+/**
+ * Validates whether a storage key strictly adheres to the AdLabs physical media storage invariant:
+ * `media/sha256/<lowercase 64-character hexadecimal SHA>`
+ *
+ * @param storageKey Storage key string to test.
+ * @returns boolean indicating if the key is canonically valid.
+ */
+export function isCanonicalMediaStorageKey(
+  storageKey: string | null | undefined,
+): boolean {
+  if (!storageKey || typeof storageKey !== "string") return false;
+  return CANONICAL_STORAGE_KEY_REGEX.test(storageKey.trim());
+}
 
 /**
  * Generates a pure, deterministic, content-addressed storage key for an asset.

@@ -1,0 +1,3 @@
+ALTER TABLE "media_derivatives" ADD CONSTRAINT "media_derivatives_status_check" CHECK ("media_derivatives"."status" IN ('PENDING', 'PROCESSING', 'READY', 'FAILED'));--> statement-breakpoint
+ALTER TABLE "media_derivatives" ADD CONSTRAINT "media_derivatives_kind_check" CHECK ("media_derivatives"."derivative_kind" IN ('PREVIEW_LOOP', 'DISPLAY_IMAGE', 'POSTER'));--> statement-breakpoint
+ALTER TABLE "media_derivatives" ADD CONSTRAINT "media_derivatives_ready_asset_check" CHECK (("media_derivatives"."status" = 'READY' AND "media_derivatives"."derived_media_asset_id" IS NOT NULL) OR ("media_derivatives"."status" IN ('PENDING', 'PROCESSING', 'FAILED') AND "media_derivatives"."derived_media_asset_id" IS NULL));

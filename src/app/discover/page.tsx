@@ -93,7 +93,11 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                     {/* Dominant Lead Artifact (7 cols lg, 8 cols 2xl) */}
                     {lead && (
                       <div className="lg:col-span-7 2xl:col-span-8">
-                        <CreativeCard item={lead.item} layoutRole="lead" />
+                        <CreativeCard
+                          item={lead.item}
+                          layoutRole="lead"
+                          clusterId={cluster.id}
+                        />
                       </div>
                     )}
 
@@ -105,6 +109,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                             key={c.item.id}
                             item={c.item}
                             layoutRole="supporting"
+                            clusterId={cluster.id}
                           />
                         ))}
                       </div>
@@ -134,6 +139,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                             <CreativeCard
                               item={c.item}
                               layoutRole="offset"
+                              clusterId={cluster.id}
                             />
                           </div>
                         ))}
@@ -143,7 +149,11 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                     {/* Wide Centerpiece Interruption */}
                     {wide && (
                       <div className="w-full pt-2 sm:pt-4 border-t border-[#12141c]/60">
-                        <CreativeCard item={wide.item} layoutRole="wide" />
+                        <CreativeCard
+                          item={wide.item}
+                          layoutRole="wide"
+                          clusterId={cluster.id}
+                        />
                       </div>
                     )}
                   </div>
@@ -168,6 +178,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                           key={c.item.id}
                           item={c.item}
                           layoutRole="supporting"
+                          clusterId={cluster.id}
                         />
                       ))}
                     </div>
@@ -176,7 +187,11 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                   {/* Dominant Lead Artifact (7 cols lg, 8 cols 2xl right) */}
                   {lead && (
                     <div className="lg:col-span-7 2xl:col-span-8 order-1 lg:order-2">
-                      <CreativeCard item={lead.item} layoutRole="lead" />
+                      <CreativeCard
+                        item={lead.item}
+                        layoutRole="lead"
+                        clusterId={cluster.id}
+                      />
                     </div>
                   )}
                 </div>
