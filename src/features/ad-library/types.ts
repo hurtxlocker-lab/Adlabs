@@ -26,6 +26,19 @@ export interface AdLibraryCardItem {
   media: AdLibraryMediaItem[];
 }
 
+export interface AdLibraryCreativeVariation {
+  id: string;
+  sourceCardIds: string[];
+  position: number;
+  headline: string | null;
+  body: string | null;
+  description: string | null;
+  ctaText: string | null;
+  ctaType: string | null;
+  destinationUrl: string | null;
+  media: AdLibraryMediaItem[];
+}
+
 export interface AdLibraryItem {
   id: string;
   source: string;
@@ -48,6 +61,11 @@ export interface AdLibraryItem {
   lastSeenAt: Date;
   adLibraryUrl: string | null;
   media: AdLibraryMediaItem[];
+  sourceCards: AdLibraryCardItem[];
+  variations: AdLibraryCreativeVariation[];
+  /**
+   * @deprecated Use variations for UI presentation or sourceCards for provenance
+   */
   cards: AdLibraryCardItem[];
 }
 

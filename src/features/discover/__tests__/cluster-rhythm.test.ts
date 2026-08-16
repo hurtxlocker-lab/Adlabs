@@ -32,7 +32,55 @@ function createMockAd(
     lastSeenAt: new Date("2026-08-15T00:00:00.000Z"),
     adLibraryUrl: null,
     media: [],
-    cards: displayFormat === "DCO" ? [{ id: "c1", position: 0, headline: "H", body: "B", description: null, ctaText: null, ctaType: null, destinationUrl: null, media: [] }] : [],
+    sourceCards:
+      displayFormat === "DCO"
+        ? [
+            {
+              id: "c1",
+              position: 0,
+              headline: "H",
+              body: "B",
+              description: null,
+              ctaText: null,
+              ctaType: null,
+              destinationUrl: null,
+              media: [],
+            },
+          ]
+        : [],
+    variations:
+      displayFormat === "DCO"
+        ? [
+            {
+              id: "c1",
+              sourceCardIds: ["c1"],
+              position: 1,
+              headline: "H",
+              body: "B",
+              description: null,
+              ctaText: null,
+              ctaType: null,
+              destinationUrl: null,
+              media: [],
+            },
+          ]
+        : [],
+    cards:
+      displayFormat === "DCO"
+        ? [
+            {
+              id: "c1",
+              position: 0,
+              headline: "H",
+              body: "B",
+              description: null,
+              ctaText: null,
+              ctaType: null,
+              destinationUrl: null,
+              media: [],
+            },
+          ]
+        : [],
   };
 }
 

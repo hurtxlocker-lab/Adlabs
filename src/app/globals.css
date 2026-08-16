@@ -98,3 +98,97 @@ body {
   background-color: var(--accent-subtle);
   color: #fff;
 }
+
+/* ==========================================================================
+   Pass 3A: Interaction Language Foundation
+   States: SEE -> NOTICE -> ENGAGE -> UNDERSTAND
+   ========================================================================== */
+
+/* Artifact Base */
+[data-artifact] {
+  opacity: 1;
+  transition: opacity 160ms ease-out;
+}
+
+/* Cluster Sibling Recession (Desktop fine pointer only) */
+@media (hover: hover) and (pointer: fine) {
+  [data-cluster]:has([data-artifact]:hover) [data-artifact]:not(:hover),
+  [data-cluster]:has([data-artifact]:focus-within) [data-artifact]:not(:focus-within) {
+    opacity: 0.90;
+  }
+}
+
+/* Focused / Hovered Artifact: Subtle Contrast Step */
+[data-artifact] .artifact-media-frame {
+  border-color: #161820;
+  transition: border-color 160ms ease-out;
+}
+
+[data-artifact]:hover .artifact-media-frame,
+[data-artifact]:focus-within .artifact-media-frame {
+  border-color: #2e3340;
+}
+
+[data-artifact] .artifact-evidence {
+  color: var(--text-evidence);
+  transition: color 160ms ease-out;
+}
+
+[data-artifact]:hover .artifact-evidence,
+[data-artifact]:focus-within .artifact-evidence {
+  color: #b0b7c4;
+}
+
+[data-artifact] .artifact-examine-link {
+  color: var(--text-primary);
+  transition: color 160ms ease-out;
+}
+
+[data-artifact]:hover .artifact-examine-link,
+[data-artifact]:focus-within .artifact-examine-link {
+  color: #ffffff;
+}
+
+/* DCO Backing Stepped Edge */
+[data-artifact] .dco-stacked-edge {
+  border-color: #1b1e2a;
+  transition: border-color 160ms ease-out;
+}
+
+[data-artifact]:hover .dco-stacked-edge,
+[data-artifact]:focus-within .dco-stacked-edge {
+  border-color: #2e3447;
+}
+
+/* DCO Crossfade Transition (170ms ease-out, crossfade only) */
+.dco-card-crossfade {
+  transition: opacity 170ms ease-out;
+}
+
+/* Accessible focus visible outlines */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-cluster]:has([data-artifact]:hover) [data-artifact]:not(:hover),
+  [data-cluster]:has([data-artifact]:focus-within) [data-artifact]:not(:focus-within) {
+    opacity: 1 !important;
+  }
+  .dco-card-crossfade {
+    transition: none !important;
+  }
+}

@@ -1,4 +1,9 @@
-import type { AdLibraryItem, AdLibraryMediaItem } from "./types";
+import type {
+  AdLibraryCardItem,
+  AdLibraryCreativeVariation,
+  AdLibraryItem,
+  AdLibraryMediaItem,
+} from "./types";
 
 /**
  * Regular expression matching raw Meta template placeholder variables (e.g. {{product.name}}, {{product.brand}}).
@@ -29,20 +34,101 @@ export function sanitizeDisplayCopy(
 }
 
 /**
- * Formats display format tag with factual card count for DCO / multi-card ads.
+ * Normalizes string copy for conservative exact-equality comparison.
+ * Trims whitespace and treats null/empty as null.
+ */
+function normalizeCopyValue(val: string | null | undefined): string | null {
+  if (val == null) return null;
+  const trimmed = val.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * Deterministically resolves distinct product-facing creative variations from ordered source cards.
+ *
+ * Rules:
+ *  1. Preserves source card ordering by position.
+ *  2. Derives exact display signature:
+ *     - Primary visual media asset ID (SHA-based)
+ *     - Normalized headline / title
+ *     - Normalized body
+ *     - Normalized description
+ *     - Normalized CTA text
+ *     - CTA type
+ *     - Normalized destination URL
+ *  3. Exact duplicates collapse into the first occurrence representative.
+ *  4. Provenance is preserved in variation.sourceCardIds.
+ *  5. Distinct media bytes / SHAs NEVER collapse together.
+ */
+export function resolveCreativeVariations(
+  cards: AdLibraryCardItem[],
+): AdLibraryCreativeVariation[] {
+  if (!cards || cards.length === 0) return [];
+
+  const variations: AdLibraryCreativeVariation[] = [];
+  const signatureMap = new Map<string, AdLibraryCreativeVariation>();
+
+  // Ensure deterministic processing ordered by persisted position
+  const sortedCards = [...cards].sort((a, b) => a.position - b.position);
+
+  for (const card of sortedCards) {
+    const primaryMedia =
+      card.media.find((m) => m.role !== "preview") ?? card.media[0];
+    const primaryMediaKey = primaryMedia?.id ?? "none";
+
+    const normalizedHeadline = normalizeCopyValue(card.headline);
+    const normalizedBody = normalizeCopyValue(card.body);
+    const normalizedDescription = normalizeCopyValue(card.description);
+    const normalizedCtaText = normalizeCopyValue(card.ctaText);
+    const ctaType = card.ctaType ?? null;
+    const normalizedDestinationUrl = normalizeCopyValue(card.destinationUrl);
+
+    const signature = JSON.stringify([
+      primaryMediaKey,
+      normalizedHeadline,
+      normalizedBody,
+      normalizedDescription,
+      normalizedCtaText,
+      ctaType,
+      normalizedDestinationUrl,
+    ]);
+
+    const existing = signatureMap.get(signature);
+    if (existing) {
+      existing.sourceCardIds.push(card.id);
+    } else {
+      const variation: AdLibraryCreativeVariation = {
+        id: card.id,
+        sourceCardIds: [card.id],
+        position: variations.length + 1,
+        headline: card.headline,
+        body: card.body,
+        description: card.description,
+        ctaText: card.ctaText,
+        ctaType: card.ctaType,
+        destinationUrl: card.destinationUrl,
+        media: card.media,
+      };
+      variations.push(variation);
+      signatureMap.set(signature, variation);
+    }
+  }
+
+  return variations;
+}
+
+/**
+ * Formats display format tag with factual variation count for DCO / multi-variation ads.
  */
 export function formatDisplayFormat(
   format: string | null,
-  cardCount = 0,
+  variationCount = 0,
 ): string {
   const baseFormat = format ? format.toUpperCase() : "VIDEO";
 
-  if (baseFormat === "DCO" || cardCount > 1) {
-    if (cardCount > 1) {
-      return `DCO • ${cardCount} cards`;
-    }
-    if (cardCount === 1) {
-      return `DCO • 1 card`;
+  if (baseFormat === "DCO" || variationCount > 1) {
+    if (variationCount > 1) {
+      return `DCO • ${variationCount} variations`;
     }
     return "DCO";
   }
@@ -54,7 +140,7 @@ export function formatDisplayFormat(
  * Returns the primary visual assets for rendering an ad item in a stream or detail view.
  *
  * Distinguishes between playable video assets, preview poster images, and standalone images.
- * If direct media is empty, falls back to the first available card media.
+ * If direct media is empty, falls back to the first available variation/card media.
  */
 export function getPrimaryMedia(item: AdLibraryItem): {
   video?: AdLibraryMediaItem;
@@ -65,7 +151,13 @@ export function getPrimaryMedia(item: AdLibraryItem): {
   const allMedia =
     item.media.length > 0
       ? item.media
-      : item.cards.flatMap((c) => c.media);
+      : item.variations && item.variations.length > 0
+        ? item.variations.flatMap((v) => v.media)
+        : item.sourceCards && item.sourceCards.length > 0
+          ? item.sourceCards.flatMap((c) => c.media)
+          : item.cards && item.cards.length > 0
+            ? item.cards.flatMap((c) => c.media)
+            : [];
 
   const video = allMedia.find((m) => m.mediaType === "VIDEO");
   const preview = allMedia.find(
@@ -114,11 +206,5 @@ export function matchesFactualSearch(
     item.primaryText?.toLowerCase().includes(term) ?? false;
   const sourceIdMatch = item.sourceAdId.toLowerCase().includes(term);
 
-  const cardMatch = item.cards.some(
-    (c) =>
-      (c.headline?.toLowerCase().includes(term) ?? false) ||
-      (c.body?.toLowerCase().includes(term) ?? false),
-  );
-
-  return brandMatch || headlineMatch || primaryTextMatch || sourceIdMatch || cardMatch;
+  return brandMatch || headlineMatch || primaryTextMatch || sourceIdMatch;
 }

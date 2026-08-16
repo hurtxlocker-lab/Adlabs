@@ -87,6 +87,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                 return (
                   <div
                     key={cluster.id}
+                    data-cluster={cluster.id}
                     className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
                   >
                     {/* Dominant Lead Artifact (7 cols) */}
@@ -119,6 +120,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                 return (
                   <div
                     key={cluster.id}
+                    data-cluster={cluster.id}
                     className="flex flex-col gap-10 lg:gap-14"
                   >
                     {/* Balanced Offset Duo (Side-by-Side) */}
@@ -155,6 +157,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
               return (
                 <div
                   key={cluster.id}
+                  data-cluster={cluster.id}
                   className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
                 >
                   {/* Stacked Supporting Companions (5 cols left) */}

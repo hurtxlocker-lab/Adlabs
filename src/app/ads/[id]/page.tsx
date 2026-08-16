@@ -1,12 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAdLibraryItemById } from "@/features/ad-library";
-import {
-  formatDisplayFormat,
-  formatFactualDate,
-  getPrimaryMedia,
-} from "@/features/ad-library/utils";
+import { formatFactualDate } from "@/features/ad-library/utils";
 import { Header } from "@/components/navigation/header";
+import { DetailMediaPlayer } from "@/features/discover/components/detail-media-player";
 
 interface AdDetailPageProps {
   params: Promise<{
@@ -24,13 +21,7 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
     notFound();
   }
 
-  const { video, preview, displayMedia } = getPrimaryMedia(item);
-  const isVideo = item.displayFormat === "VIDEO" || video !== undefined;
   const isObservedActive = item.isActiveObserved;
-  const formattedFormat = formatDisplayFormat(
-    item.displayFormat,
-    item.cards.length,
-  );
 
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
@@ -41,11 +32,9 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
         <div className="flex items-center justify-between">
           <Link
             href="/discover"
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-sans text-[#9da2ad] hover:text-[#e07945] transition-colors group"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-sans text-[#9da2ad] hover:text-[#e07945] transition-colors"
           >
-            <span className="group-hover:-translate-x-0.5 transition-transform">
-              ←
-            </span>
+            <span>←</span>
             Discover
           </Link>
 
@@ -58,125 +47,91 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
           {/* Left Column: Heroic Media Centerpiece (7 cols) */}
           <section className="lg:col-span-7 flex flex-col gap-6">
-            <div className="flex flex-col gap-3">
-              <div className="relative w-full bg-[#030406] border border-[#161820] flex items-center justify-center min-h-[420px] sm:min-h-[560px] max-h-[760px] overflow-hidden">
-                {isVideo && video ? (
-                  <video
-                    src={video.mediaUrl}
-                    poster={preview?.mediaUrl}
-                    controls
-                    playsInline
-                    className="w-full h-full max-h-[760px] object-contain"
-                  />
-                ) : displayMedia ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={displayMedia.mediaUrl}
-                    alt={item.headline || item.brand.name}
-                    className="w-full h-full max-h-[760px] object-contain"
-                  />
-                ) : (
-                  <div className="w-full h-96 flex items-center justify-center text-[#686e7b] font-sans text-xs">
-                    Creative Media
-                  </div>
-                )}
-              </div>
+            <DetailMediaPlayer item={item} />
 
-              <div className="font-mono text-xs text-[#8e95a2] flex items-center justify-between pt-1">
-                <span>{formattedFormat}</span>
-                <span className="tabular-nums">
-                  Observed {formatFactualDate(item.firstSeenAt)}
-                </span>
-              </div>
-            </div>
-
-            {/* Sequential DCO / Multi-Card Breakdown */}
-            {item.cards.length > 1 && (
+            {/* Sequential DCO / Multi-Variation Breakdown */}
+            {item.variations && item.variations.length > 1 && (
               <div className="flex flex-col gap-4 pt-6 border-t border-[#16181f]">
-                <div className="flex items-baseline justify-between">
-                  <h2 className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
-                    Dynamic Creative Cards ({item.cards.length})
-                  </h2>
-                  <span className="text-xs font-mono text-[#686e7b]">
-                    Sequential Manifest
-                  </span>
-                </div>
+                <h2 className="text-xs font-mono text-[#8e95a2] uppercase tracking-wider">
+                  Creative variations ({item.variations.length})
+                </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {item.cards.map((card, idx) => {
-                    const cardPrimaryMedia =
-                      card.media.find((m) => m.role !== "preview") ??
-                      card.media[0];
-                    const cardPreview = card.media.find(
+                  {item.variations.map((variation, idx) => {
+                    const variationPrimaryMedia =
+                      variation.media.find((m) => m.role !== "preview") ??
+                      variation.media[0];
+                    const variationPreview = variation.media.find(
                       (m) => m.role === "preview",
                     );
 
                     return (
                       <div
-                        key={card.id}
+                        key={variation.id}
                         className="bg-[#090b10] border border-[#161820] p-4 flex flex-col gap-3"
                       >
-                        {/* Card Media Preview */}
+                        {/* Variation Media Preview */}
                         <div className="relative w-full h-44 bg-[#030406] border border-[#14161e] flex items-center justify-center overflow-hidden">
-                          {cardPrimaryMedia?.mediaType === "VIDEO" ? (
+                          {variationPrimaryMedia?.mediaType === "VIDEO" ? (
                             <video
-                              src={cardPrimaryMedia.mediaUrl}
-                              poster={cardPreview?.mediaUrl}
+                              src={variationPrimaryMedia.mediaUrl}
+                              poster={variationPreview?.mediaUrl}
+                              preload="none"
                               controls
                               playsInline
                               className="w-full h-full object-contain"
                             />
-                          ) : cardPrimaryMedia ? (
+                          ) : variationPrimaryMedia ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={cardPrimaryMedia.mediaUrl}
-                              alt={card.headline || `Card ${idx + 1}`}
+                              src={variationPrimaryMedia.mediaUrl}
+                              alt={variation.headline || `Variation ${idx + 1}`}
                               className="w-full h-full object-contain"
                             />
                           ) : (
                             <span className="font-mono text-xs text-[#686e7b]">
-                              Card Asset
+                              Variation Asset
                             </span>
                           )}
                         </div>
 
-                        {/* Card Metadata */}
+                        {/* Variation Metadata */}
                         <div className="flex flex-col gap-1.5 pt-1">
                           <div className="flex items-center justify-between text-xs font-mono text-[#8e95a2]">
-                            <span>Card {idx + 1}</span>
-                            {card.ctaText && (
+                            <span>Variation {idx + 1}</span>
+                            {variation.ctaText && (
                               <span className="text-[#f3f4f6]">
-                                {card.ctaText}
+                                {variation.ctaText}
                               </span>
                             )}
                           </div>
 
-                          {card.headline && (
+                          {variation.headline && (
                             <h3 className="font-editorial text-base text-[#f3f4f6] leading-snug">
-                              {card.headline}
+                              {variation.headline}
                             </h3>
                           )}
 
-                          {card.body && (
+                          {variation.body && (
                             <p className="font-sans text-xs text-[#9da2ad] leading-relaxed line-clamp-3">
-                              {card.body}
+                              {variation.body}
                             </p>
                           )}
 
-                          {card.description && (
+                          {variation.description && (
                             <p className="font-mono text-[11px] text-[#686e7b]">
-                              {card.description}
+                              {variation.description}
                             </p>
                           )}
 
-                          {card.destinationUrl && (
+                          {variation.destinationUrl && (
                             <a
-                              href={card.destinationUrl}
+                              href={variation.destinationUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[11px] font-sans text-[#8e95a2] hover:text-[#e07945] transition-colors truncate pt-1"
                             >
-                              {card.destinationUrl}
+                              {variation.destinationUrl}
                             </a>
                           )}
                         </div>
@@ -318,15 +273,10 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
                     href={item.adLibraryUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-sans text-[#9da2ad] hover:text-[#e07945] transition-colors group/src"
+                    className="inline-flex items-center gap-1.5 text-xs font-sans text-[#9da2ad] hover:text-[#e07945] transition-colors"
                   >
                     <span>View in Meta Ad Library</span>
-                    <span
-                      className="group-hover/src:translate-x-0.5 group-hover/src:-translate-y-0.5 transition-transform"
-                      aria-hidden="true"
-                    >
-                      ↗
-                    </span>
+                    <span aria-hidden="true">↗</span>
                   </a>
                 </div>
               )}

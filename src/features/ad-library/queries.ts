@@ -17,7 +17,7 @@ import type {
   AdLibraryMediaItem,
   AdLibraryQueryParams,
 } from "./types";
-import { sanitizeDisplayCopy } from "./utils";
+import { resolveCreativeVariations, sanitizeDisplayCopy } from "./utils";
 
 /**
  * Retrieves factual ad library items for Discover surfaces.
@@ -239,17 +239,18 @@ export async function getAdLibraryItems(
 
   for (const row of adRows) {
     const directMedia = directMediaByAdId.get(row.id) ?? [];
-    const cards = cardsByAdId.get(row.id) ?? [];
+    const sourceCards = cardsByAdId.get(row.id) ?? [];
+    const variations = resolveCreativeVariations(sourceCards);
 
-    // Media list: if direct media is present, use it; otherwise, flatten unique card media
+    // Media list: if direct media is present, use it; otherwise, flatten unique variation media
     let media: AdLibraryMediaItem[];
     if (directMedia.length > 0) {
       media = directMedia;
     } else {
       const seenAssetIds = new Set<string>();
       media = [];
-      for (const card of cards) {
-        for (const m of card.media) {
+      for (const v of variations) {
+        for (const m of v.media) {
           if (!seenAssetIds.has(m.id)) {
             seenAssetIds.add(m.id);
             media.push(m);
@@ -262,26 +263,26 @@ export async function getAdLibraryItems(
 
     // Display copy resolution:
     // 1. Sanitize ad-level fields to reject raw {{...}} template tokens
-    // 2. If ad-level field is a template token or null, fall back to first concrete card field
+    // 2. If ad-level field is a template token or null, fall back to first concrete variation field
     let headline = sanitizeDisplayCopy(row.headline);
-    if (!headline && cards.length > 0) {
-      headline = cards.find((c) => c.headline !== null)?.headline ?? null;
+    if (!headline && variations.length > 0) {
+      headline = variations.find((v) => v.headline !== null)?.headline ?? null;
     }
 
     let primaryText = sanitizeDisplayCopy(row.primaryText);
-    if (!primaryText && cards.length > 0) {
-      primaryText = cards.find((c) => c.body !== null)?.body ?? null;
+    if (!primaryText && variations.length > 0) {
+      primaryText = variations.find((v) => v.body !== null)?.body ?? null;
     }
 
     let description = sanitizeDisplayCopy(row.description);
-    if (!description && cards.length > 0) {
-      description = cards.find((c) => c.description !== null)?.description ?? null;
+    if (!description && variations.length > 0) {
+      description = variations.find((v) => v.description !== null)?.description ?? null;
     }
 
-    const ctaText = row.ctaText ?? (cards.length > 0 ? cards[0].ctaText : null);
-    const ctaType = row.ctaType ?? (cards.length > 0 ? cards[0].ctaType : null);
+    const ctaText = row.ctaText ?? (variations.length > 0 ? variations[0].ctaText : null);
+    const ctaType = row.ctaType ?? (variations.length > 0 ? variations[0].ctaType : null);
     const destinationUrl =
-      row.destinationUrl ?? (cards.length > 0 ? cards[0].destinationUrl : null);
+      row.destinationUrl ?? (variations.length > 0 ? variations[0].destinationUrl : null);
 
     items.push({
       id: row.id,
@@ -305,7 +306,9 @@ export async function getAdLibraryItems(
       lastSeenAt: row.lastSeenAt,
       adLibraryUrl: row.adLibraryUrl,
       media,
-      cards,
+      sourceCards,
+      variations,
+      cards: sourceCards,
     });
   }
 
@@ -450,7 +453,7 @@ export async function getAdLibraryItemById(
     }
   }
 
-  const cards: AdLibraryCardItem[] = cardRows.map((cr) => ({
+  const sourceCards: AdLibraryCardItem[] = cardRows.map((cr) => ({
     id: cr.cardId,
     position: cr.position,
     headline: sanitizeDisplayCopy(cr.title),
@@ -462,6 +465,8 @@ export async function getAdLibraryItemById(
     media: mediaByCardId.get(cr.cardId) ?? [],
   }));
 
+  const variations = resolveCreativeVariations(sourceCards);
+
   // Resolve media list
   let media: AdLibraryMediaItem[];
   if (directMedia.length > 0) {
@@ -469,8 +474,8 @@ export async function getAdLibraryItemById(
   } else {
     const seenAssetIds = new Set<string>();
     media = [];
-    for (const card of cards) {
-      for (const m of card.media) {
+    for (const v of variations) {
+      for (const m of v.media) {
         if (!seenAssetIds.has(m.id)) {
           seenAssetIds.add(m.id);
           media.push(m);
@@ -480,24 +485,24 @@ export async function getAdLibraryItemById(
   }
 
   let headline = sanitizeDisplayCopy(row.headline);
-  if (!headline && cards.length > 0) {
-    headline = cards.find((c) => c.headline !== null)?.headline ?? null;
+  if (!headline && variations.length > 0) {
+    headline = variations.find((v) => v.headline !== null)?.headline ?? null;
   }
 
   let primaryText = sanitizeDisplayCopy(row.primaryText);
-  if (!primaryText && cards.length > 0) {
-    primaryText = cards.find((c) => c.body !== null)?.body ?? null;
+  if (!primaryText && variations.length > 0) {
+    primaryText = variations.find((v) => v.body !== null)?.body ?? null;
   }
 
   let description = sanitizeDisplayCopy(row.description);
-  if (!description && cards.length > 0) {
-    description = cards.find((c) => c.description !== null)?.description ?? null;
+  if (!description && variations.length > 0) {
+    description = variations.find((v) => v.description !== null)?.description ?? null;
   }
 
-  const ctaText = row.ctaText ?? (cards.length > 0 ? cards[0].ctaText : null);
-  const ctaType = row.ctaType ?? (cards.length > 0 ? cards[0].ctaType : null);
+  const ctaText = row.ctaText ?? (variations.length > 0 ? variations[0].ctaText : null);
+  const ctaType = row.ctaType ?? (variations.length > 0 ? variations[0].ctaType : null);
   const destinationUrl =
-    row.destinationUrl ?? (cards.length > 0 ? cards[0].destinationUrl : null);
+    row.destinationUrl ?? (variations.length > 0 ? variations[0].destinationUrl : null);
 
   return {
     id: row.id,
@@ -521,6 +526,8 @@ export async function getAdLibraryItemById(
     lastSeenAt: row.lastSeenAt,
     adLibraryUrl: row.adLibraryUrl,
     media,
-    cards,
+    sourceCards,
+    variations,
+    cards: sourceCards,
   };
 }

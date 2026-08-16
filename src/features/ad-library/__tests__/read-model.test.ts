@@ -58,8 +58,53 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
         mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
       },
     ],
+    sourceCards: [],
+    variations: [],
     cards: [],
   };
+
+  const sampleDcoCards = [
+    {
+      id: "card-1",
+      position: 0,
+      headline: "Pop Culture Has a New Home!",
+      body: "Punjab, your ultimate fandom destination is finally here! Come say hi!",
+      description: null,
+      ctaText: "Shop Now",
+      ctaType: "SHOP_NOW",
+      destinationUrl: "https://www.thesouledstore.com/stores-near-me",
+      media: [
+        {
+          id: "media-dco-1",
+          mediaType: "VIDEO" as const,
+          role: "primary",
+          position: 0,
+          mimeType: "video/mp4",
+          mediaUrl: resolveMediaUrl(sampleMediaKey, baseUrl),
+        },
+      ],
+    },
+    {
+      id: "card-2",
+      position: 1,
+      headline: "Pop Culture Has a New Home!",
+      body: "Step inside the store, where walls turn into canvases of pure creativity",
+      description: "10% Cashback",
+      ctaText: "Shop Now",
+      ctaType: "SHOP_NOW",
+      destinationUrl: "https://www.thesouledstore.com/stores-near-me",
+      media: [
+        {
+          id: "media-dco-2",
+          mediaType: "IMAGE" as const,
+          role: "preview",
+          position: 0,
+          mimeType: "image/jpeg",
+          mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
+        },
+      ],
+    },
+  ];
 
   const sampleDcoAd: AdLibraryItem = {
     id: "ade858ad-5e42-43a8-b422-97dc7e615d30",
@@ -71,7 +116,6 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
       slug: "the-souled-store",
     },
     displayFormat: "DCO",
-    // Concrete resolved text from card fallback (since ad-level raw was {{product.name}} and {{product.brand}})
     headline: "Pop Culture Has a New Home!",
     primaryText:
       "Punjab, your ultimate fandom destination is finally here! Come say hi!",
@@ -102,48 +146,34 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
         mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
       },
     ],
-    cards: [
+    sourceCards: sampleDcoCards,
+    variations: [
       {
         id: "card-1",
-        position: 0,
+        sourceCardIds: ["card-1"],
+        position: 1,
         headline: "Pop Culture Has a New Home!",
         body: "Punjab, your ultimate fandom destination is finally here! Come say hi!",
         description: null,
         ctaText: "Shop Now",
         ctaType: "SHOP_NOW",
         destinationUrl: "https://www.thesouledstore.com/stores-near-me",
-        media: [
-          {
-            id: "media-dco-1",
-            mediaType: "VIDEO",
-            role: "primary",
-            position: 0,
-            mimeType: "video/mp4",
-            mediaUrl: resolveMediaUrl(sampleMediaKey, baseUrl),
-          },
-        ],
+        media: sampleDcoCards[0].media,
       },
       {
         id: "card-2",
-        position: 1,
+        sourceCardIds: ["card-2"],
+        position: 2,
         headline: "Pop Culture Has a New Home!",
         body: "Step inside the store, where walls turn into canvases of pure creativity",
         description: "10% Cashback",
         ctaText: "Shop Now",
         ctaType: "SHOP_NOW",
         destinationUrl: "https://www.thesouledstore.com/stores-near-me",
-        media: [
-          {
-            id: "media-dco-2",
-            mediaType: "IMAGE",
-            role: "preview",
-            position: 0,
-            mimeType: "image/jpeg",
-            mediaUrl: resolveMediaUrl(samplePreviewKey, baseUrl),
-          },
-        ],
+        media: sampleDcoCards[1].media,
       },
     ],
+    cards: sampleDcoCards,
   };
 
   it("1. getPrimaryMedia correctly extracts video asset and preview image", () => {
@@ -169,7 +199,7 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
     expect(formatFactualDate("invalid-date")).toBe("Unknown");
   });
 
-  it("3. matchesFactualSearch performs factual text matching across brand, headline, primaryText, sourceAdId, and cards", () => {
+  it("3. matchesFactualSearch performs factual text matching across brand, headline, primaryText, and sourceAdId", () => {
     expect(matchesFactualSearch(sampleAd, "Mamaearth")).toBe(true);
     expect(matchesFactualSearch(sampleAd, "mama")).toBe(true);
     expect(matchesFactualSearch(sampleAd, "Natural Onion")).toBe(true);
@@ -179,10 +209,6 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
     expect(matchesFactualSearch(sampleAd, "9999999999")).toBe(false);
     expect(matchesFactualSearch(sampleAd, "")).toBe(true);
     expect(matchesFactualSearch(sampleAd, "   ")).toBe(true);
-
-    // Matching against DCO card text
-    expect(matchesFactualSearch(sampleDcoAd, "fandom destination")).toBe(true);
-    expect(matchesFactualSearch(sampleDcoAd, "canvases of pure creativity")).toBe(true);
   });
 
   it("4. verifies canonical mediaUrl resolution within AdLibraryItem", () => {
@@ -220,22 +246,22 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
     expect(sanitizeDisplayCopy("  Shop Now  ")).toBe("Shop Now");
   });
 
-  it("7. formatDisplayFormat renders factual multi-card tags", () => {
+  it("7. formatDisplayFormat renders factual multi-variation tags", () => {
     expect(formatDisplayFormat("VIDEO", 0)).toBe("VIDEO");
     expect(formatDisplayFormat("IMAGE", 0)).toBe("IMAGE");
-    expect(formatDisplayFormat("DCO", 3)).toBe("DCO • 3 cards");
-    expect(formatDisplayFormat("DCO", 2)).toBe("DCO • 2 cards");
-    expect(formatDisplayFormat("DCO", 1)).toBe("DCO • 1 card");
+    expect(formatDisplayFormat("DCO", 3)).toBe("DCO • 3 variations");
+    expect(formatDisplayFormat("DCO", 2)).toBe("DCO • 2 variations");
+    expect(formatDisplayFormat("DCO", 1)).toBe("DCO");
     expect(formatDisplayFormat("DCO", 0)).toBe("DCO");
-    expect(formatDisplayFormat(null, 4)).toBe("DCO • 4 cards");
+    expect(formatDisplayFormat(null, 4)).toBe("DCO • 4 variations");
   });
 
-  it("8. DCO read-model preserves multi-card structure and ordering", () => {
-    expect(sampleDcoAd.cards).toHaveLength(2);
-    expect(sampleDcoAd.cards[0].position).toBe(0);
-    expect(sampleDcoAd.cards[1].position).toBe(1);
-    expect(sampleDcoAd.cards[0].headline).toBe("Pop Culture Has a New Home!");
-    expect(sampleDcoAd.cards[1].body).toContain("canvases of pure creativity");
+  it("8. DCO read-model preserves multi-variation structure and ordering", () => {
+    expect(sampleDcoAd.variations).toHaveLength(2);
+    expect(sampleDcoAd.variations[0].position).toBe(1);
+    expect(sampleDcoAd.variations[1].position).toBe(2);
+    expect(sampleDcoAd.variations[0].headline).toBe("Pop Culture Has a New Home!");
+    expect(sampleDcoAd.variations[1].body).toContain("canvases of pure creativity");
   });
 
   it("9. zero raw template tokens leak into display-ready fields", () => {
@@ -246,10 +272,10 @@ describe("Ad Library Read Model & Pure Logic Tests", () => {
       if (sampleDcoAd.primaryText) expect(sampleDcoAd.primaryText).not.toContain(token);
       if (sampleDcoAd.description) expect(sampleDcoAd.description).not.toContain(token);
 
-      for (const card of sampleDcoAd.cards) {
-        if (card.headline) expect(card.headline).not.toContain(token);
-        if (card.body) expect(card.body).not.toContain(token);
-        if (card.description) expect(card.description).not.toContain(token);
+      for (const variation of sampleDcoAd.variations) {
+        if (variation.headline) expect(variation.headline).not.toContain(token);
+        if (variation.body) expect(variation.body).not.toContain(token);
+        if (variation.description) expect(variation.description).not.toContain(token);
       }
     }
   });
