@@ -139,6 +139,8 @@ export interface StoredMediaInput {
   byteSize: bigint;
   storageProvider: string;
   storageKey: string;
+  width?: number | null;
+  height?: number | null;
 }
 
 export interface PreparedMediaRef {

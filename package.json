@@ -16,7 +16,11 @@
     "db:target": "tsx --conditions=react-server scripts/db-target.ts",
     "ingest:curious-coder:dev": "tsx --conditions=react-server scripts/ingest-curious-coder-dev.ts",
     "media:benchmark:dev": "tsx --conditions=react-server scripts/media-benchmark-dev.ts",
-    "media:backfill:dev": "tsx --conditions=react-server scripts/media-backfill-dev.ts"
+    "media:backfill:dev": "tsx --conditions=react-server scripts/media-backfill-dev.ts",
+    "media:metadata-backfill:dev": "tsx --conditions=react-server scripts/media-metadata-backfill-dev.ts",
+    "corpus:sample:dev": "tsx --conditions=react-server scripts/corpus-sample-dev.ts",
+    "corpus:sample-batch:dev": "tsx --conditions=react-server scripts/corpus-sample-batch-dev.ts",
+    "corpus:audit:dev": "tsx --conditions=react-server scripts/corpus-audit-dev.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1110.0",

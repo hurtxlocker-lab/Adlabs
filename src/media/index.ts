@@ -2,6 +2,7 @@ export * from "./types";
 export * from "./recipes";
 export * from "./engine/detector";
 export * from "./engine/subprocess";
+export * from "./engine/binaries";
 export * from "./engine/ffprobe";
 export * from "./engine/ffmpeg";
 export * from "./engine/hashing";

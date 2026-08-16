@@ -42,3 +42,7 @@ yarn-error.log*
 next-env.d.ts
 /tmp/
 tmp/
+
+# local operator configs
+*.local.json
+scripts/*.local.json

@@ -25,6 +25,12 @@ export interface FetchCuriousCoderTaskItemsInput {
    * Default: 300 (5 minutes).
    */
   timeoutSeconds?: number;
+
+  /**
+   * Optional runtime input overrides for the saved task (e.g. { startUrls: [{ url }], resultsLimit: 6 }).
+   * When provided, these override the saved task's default inputs for this specific run.
+   */
+  inputOverrides?: Record<string, unknown>;
 }
 
 /** Result metadata from fetchCuriousCoderTaskItems. */
@@ -41,6 +47,9 @@ export interface FetchCuriousCoderTaskItemsResult {
   /** Number of items returned by the Apify dataset (before local hard cap). */
   datasetItemCount: number;
 
+  /** Actual Apify usage cost in USD if available from run object. */
+  costUsd?: number | null;
+
   /**
    * Raw provider dataset items, capped to `limit`.
    * Items are unmodified provider objects — no parsing or normalization.
@@ -51,9 +60,18 @@ export interface FetchCuriousCoderTaskItemsResult {
 /** Injectable Apify client interface for dependency injection / testing. */
 export interface ApifyClientInterface {
   task(taskId: string): {
-    call(options: {
-      waitSecs?: number;
-    }): Promise<{ id: string; status: string; defaultDatasetId?: string | null }>;
+    call(
+      inputOrOptions?: Record<string, unknown> | { waitSecs?: number },
+      options?: {
+        waitSecs?: number;
+      },
+    ): Promise<{
+      id: string;
+      status: string;
+      defaultDatasetId?: string | null;
+      usageTotalUsd?: number | null;
+      usageUsd?: unknown;
+    }>;
   };
   dataset(datasetId: string): {
     listItems(options?: {

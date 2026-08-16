@@ -1,5 +1,6 @@
 import { executeSubprocess } from "./subprocess";
 import { buildFfmpegScaleFilter } from "../recipes";
+import { resolveFfmpegPath } from "./binaries";
 import type { VideoRecipeConfig } from "../types";
 
 export interface EncodeVideoDerivativeOptions {
@@ -63,6 +64,7 @@ export async function encodeVideoDerivative({
   recipe,
   timeoutMs = 45000,
 }: EncodeVideoDerivativeOptions): Promise<void> {
+  const binaryPath = resolveFfmpegPath();
   const args = buildFfmpegArgs(inputPath, outputPath, recipe);
-  await executeSubprocess("ffmpeg", args, { timeoutMs });
+  await executeSubprocess(binaryPath, args, { timeoutMs });
 }

@@ -1,6 +1,8 @@
+import * as fs from "node:fs";
 import { downloadMedia as defaultDownloadMedia } from "@/ingestion/media";
 import type { SourceAd, SourceMedia } from "@/ingestion/types";
 import { storeDownloadedMedia as defaultStoreDownloadedMedia } from "@/storage";
+import { probeImageBuffer } from "@/media/image-probe";
 import { MediaPreparationError } from "./errors";
 import type {
   DownloadMediaFn,
@@ -81,10 +83,35 @@ export async function prepareAdMedia(
 
           const stored = await storeFn(downloaded);
 
+          let imageWidth: number | null = null;
+          let imageHeight: number | null = null;
+
+          if (
+            downloaded.mediaType === "IMAGE" ||
+            sm.type === "image" ||
+            sm.type === "video_preview"
+          ) {
+            try {
+              const headBuf = Buffer.alloc(65536);
+              const fd = await fs.promises.open(downloaded.tempFilePath, "r");
+              const { bytesRead } = await fd.read(headBuf, 0, 65536, 0);
+              await fd.close();
+              const probe = probeImageBuffer(headBuf.subarray(0, bytesRead));
+              if (probe) {
+                imageWidth = probe.width;
+                imageHeight = probe.height;
+              }
+            } catch {
+              // Non-fatal: physical dimension probe failure does not fail media preparation
+            }
+          }
+
           // Preserve the original normalized source locator URL
           storedResults.set(cacheKey, {
             ...stored,
             sourceUrl: sm.sourceUrl,
+            width: imageWidth,
+            height: imageHeight,
           });
         } catch (err) {
           if (!firstError) {

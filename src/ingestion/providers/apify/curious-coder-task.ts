@@ -4,7 +4,7 @@
  * Apify saved-task adapter for the Curious Coder Meta scraper.
  *
  * Responsibilities:
- *   1. Execute the saved Apify task (DO NOT reconstruct actor input).
+ *   1. Execute the saved Apify task (with optional runtime input overrides).
  *   2. Wait for run completion up to timeoutSeconds.
  *   3. Retrieve raw dataset items.
  *   4. Enforce an independent local hard cap on item count.
@@ -13,7 +13,6 @@
  * Design invariants:
  *   - No automatic retries.
  *   - Failed runs throw immediately.
- *   - No actor input override; the saved task's input is used as-is.
  *   - Token is never logged.
  *   - Dataset items are returned unmodified (passthrough).
  */
@@ -56,15 +55,26 @@ export async function fetchCuriousCoderTaskItems(
   input: FetchCuriousCoderTaskItemsInput,
   client: ApifyClientInterface,
 ): Promise<FetchCuriousCoderTaskItemsResult> {
-  const { taskId, limit } = input;
+  const { taskId, limit, inputOverrides } = input;
   const timeoutSeconds = input.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
 
   // Step 1: Start the saved task and wait for completion.
-  // `call()` blocks until the run finishes or `waitSecs` is exceeded.
-  // DO NOT pass `input` override — use the saved task's configured input as-is.
-  let run: { id: string; status: string; defaultDatasetId?: string | null };
+  // If inputOverrides is supplied, call(inputOverrides, { waitSecs: timeoutSeconds }).
+  // Otherwise call({ waitSecs: timeoutSeconds }) directly as saved task.
+  let run: {
+    id: string;
+    status: string;
+    defaultDatasetId?: string | null;
+    usageTotalUsd?: number | null;
+    usageUsd?: unknown;
+  };
   try {
-    run = await client.task(taskId).call({ waitSecs: timeoutSeconds });
+    const taskCaller = client.task(taskId);
+    if (inputOverrides !== undefined) {
+      run = await taskCaller.call(inputOverrides, { waitSecs: timeoutSeconds });
+    } else {
+      run = await taskCaller.call({ waitSecs: timeoutSeconds });
+    }
   } catch (err) {
     // Wrap network/SDK errors — do not expose token in messages.
     throw new ApifyTaskRunError({
@@ -77,6 +87,7 @@ export async function fetchCuriousCoderTaskItems(
 
   const runId = run.id;
   const runStatus = run.status;
+  const costUsd = typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : null;
 
   // Step 2: Validate the run outcome.
   if (runStatus !== "SUCCEEDED") {
@@ -125,6 +136,7 @@ export async function fetchCuriousCoderTaskItems(
     runStatus,
     datasetId,
     datasetItemCount,
+    costUsd,
     items,
   };
 }

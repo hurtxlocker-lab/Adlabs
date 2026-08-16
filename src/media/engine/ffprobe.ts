@@ -1,4 +1,5 @@
 import { executeSubprocess } from "./subprocess";
+import { resolveFfprobePath } from "./binaries";
 import type { PhysicalMediaProbeResult } from "../types";
 
 interface FfprobeStream {
@@ -50,7 +51,8 @@ export async function probeMediaFile(filePath: string): Promise<PhysicalMediaPro
     filePath,
   ];
 
-  const result = await executeSubprocess("ffprobe", args, { timeoutMs: 15000 });
+  const binaryPath = resolveFfprobePath();
+  const result = await executeSubprocess(binaryPath, args, { timeoutMs: 15000 });
   const parsed: FfprobeOutput = JSON.parse(result.stdout || "{}");
 
   const videoStream = parsed.streams?.find((s) => s.codec_type === "video");

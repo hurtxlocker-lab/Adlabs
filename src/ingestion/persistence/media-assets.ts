@@ -51,6 +51,9 @@ export async function ensureStoredMediaAsset(
   const mimeType = input.mimeType?.trim() || null;
   const sourceUrl = input.sourceUrl?.trim() || null;
 
+  const width = input.width ?? null;
+  const height = input.height ?? null;
+
   // 1. Race-safe INSERT ... ON CONFLICT (sha256) DO NOTHING
   const inserted = await client
     .insert(schema.mediaAssets)
@@ -62,6 +65,8 @@ export async function ensureStoredMediaAsset(
       mimeType,
       byteSize,
       sha256,
+      width,
+      height,
       downloadStatus: "STORED",
       downloadError: null,
     })
@@ -134,13 +139,19 @@ export async function ensureStoredMediaAsset(
   const shouldEnrichMime = existing.mimeType === null && mimeType !== null;
   const shouldEnrichMediaType =
     existing.mediaType === "UNKNOWN" && mediaType !== "UNKNOWN";
+  const shouldEnrichDimensions =
+    (existing.width === null || existing.height === null) &&
+    width !== null &&
+    height !== null;
 
-  if (shouldEnrichMime || shouldEnrichMediaType) {
+  if (shouldEnrichMime || shouldEnrichMediaType || shouldEnrichDimensions) {
     const updated = await client
       .update(schema.mediaAssets)
       .set({
         mimeType: shouldEnrichMime ? mimeType : existing.mimeType,
         mediaType: shouldEnrichMediaType ? mediaType : existing.mediaType,
+        width: shouldEnrichDimensions ? width : existing.width,
+        height: shouldEnrichDimensions ? height : existing.height,
         updatedAt: new Date(),
       })
       .where(eq(schema.mediaAssets.id, existing.id))

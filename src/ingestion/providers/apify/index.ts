@@ -9,5 +9,6 @@
 
 export { fetchCuriousCoderTaskItems } from "./curious-coder-task";
 export { createApifyClient } from "./client";
+export * from "./input-builder";
 export * from "./types";
 export * from "./errors";
