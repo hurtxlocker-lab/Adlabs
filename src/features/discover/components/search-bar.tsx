@@ -50,7 +50,7 @@ export function SearchBar({
   return (
     <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
       {/* Search Input Aperture */}
-      <div className="relative flex-1 group">
+      <div className="relative flex-1 max-w-xl lg:max-w-2xl group">
         <label htmlFor="ad-search" className="sr-only">
           Search creatives by brand, copy, or headline
         </label>

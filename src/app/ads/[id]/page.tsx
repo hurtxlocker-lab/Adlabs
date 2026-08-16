@@ -27,7 +27,7 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
       <Header />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 pb-32 sm:pb-20 flex flex-col gap-8">
+      <main className="flex-1 adlabs-canvas py-8 sm:py-12 pb-32 sm:pb-20 flex flex-col gap-8">
         {/* Navigation Breadcrumb & Factual Source Anchor */}
         <div className="flex items-center justify-between">
           <Link
@@ -287,7 +287,7 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
 
       {/* Grounded Footer */}
       <footer className="w-full border-t border-[#16181f] py-6 bg-[#050608] text-xs font-sans text-[#686e7b]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="adlabs-canvas flex flex-col sm:flex-row items-center justify-between gap-3">
           <span className="tracking-tight">AdLabs</span>
           <span className="font-mono text-xs text-[#8e95a2]">
             Factual Creative Observations

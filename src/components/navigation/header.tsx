@@ -7,7 +7,7 @@ interface HeaderProps {
 export function Header({ corpusCount }: HeaderProps) {
   return (
     <header className="w-full border-b border-[#16181f] bg-[#07080a]/90 backdrop-blur-md sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+      <div className="adlabs-canvas h-14 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link
             href="/discover"

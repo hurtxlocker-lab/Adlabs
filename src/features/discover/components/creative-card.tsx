@@ -124,26 +124,28 @@ export function CreativeCard({
     setIsTraversing(true);
   };
 
-  // Height configurations by presentation role
+  // Height configurations by presentation role (controlled growth for desktop research density)
   const mediaHeightClass = isLead
-    ? "min-h-[420px] sm:min-h-[520px] max-h-[640px]"
+    ? "min-h-[420px] sm:min-h-[500px] lg:min-h-[540px] 2xl:min-h-[580px] max-h-[660px]"
     : isWide
-      ? "min-h-[300px] sm:min-h-[360px] max-h-[460px]"
+      ? "min-h-[300px] sm:min-h-[360px] lg:min-h-[400px] max-h-[480px]"
       : isOffset
-        ? "min-h-[320px] sm:min-h-[380px] max-h-[480px]"
-        : "min-h-[260px] sm:min-h-[320px] max-h-[390px]";
+        ? "min-h-[320px] sm:min-h-[380px] lg:min-h-[420px] max-h-[500px]"
+        : "min-h-[260px] sm:min-h-[300px] lg:min-h-[330px] max-h-[390px]";
 
   const headlineClass = isLead
-    ? "text-2xl sm:text-3xl"
+    ? "text-2xl sm:text-3xl lg:text-[32px] max-w-2xl"
     : isWide || isOffset
-      ? "text-xl sm:text-2xl"
-      : "text-lg sm:text-xl";
+      ? "text-xl sm:text-2xl max-w-xl"
+      : "text-lg sm:text-xl max-w-lg";
 
   const copyClampClass = isLead
-    ? "line-clamp-3 max-w-2xl text-sm sm:text-base"
+    ? "line-clamp-3 max-w-2xl text-sm sm:text-base leading-relaxed"
     : isWide
-      ? "line-clamp-4 text-sm"
-      : "line-clamp-2 text-xs sm:text-sm";
+      ? "line-clamp-4 max-w-xl text-sm leading-relaxed"
+      : isOffset
+        ? "line-clamp-3 max-w-lg text-xs sm:text-sm leading-relaxed"
+        : "line-clamp-2 max-w-lg text-xs sm:text-sm leading-relaxed";
 
   const displayedHeadline = isDco
     ? activeDcoState?.headline ?? item.headline
@@ -159,11 +161,11 @@ export function CreativeCard({
     <article
       data-artifact
       className={`group flex flex-col ${
-        isWide ? "lg:grid lg:grid-cols-12 lg:gap-8 lg:items-center" : ""
+        isWide ? "lg:grid lg:grid-cols-12 lg:gap-8 xl:gap-12 2xl:gap-16 lg:items-center" : ""
       }`}
     >
       {/* 1. Primary Creative Object (Dominant Hero / Mounted Artifact) */}
-      <div className={`relative w-full ${isWide ? "lg:col-span-7" : ""}`}>
+      <div className={`relative w-full ${isWide ? "lg:col-span-7 2xl:col-span-8" : ""}`}>
         {/* Restrained DCO Plurality Cue (Stepped Card Backing) */}
         {hasMultipleVariations && (
           <div
@@ -283,7 +285,7 @@ export function CreativeCard({
       <div
         className={`flex flex-col gap-3 pt-4 ${
           isWide
-            ? "lg:col-span-5 lg:pt-0 lg:justify-center"
+            ? "lg:col-span-5 2xl:col-span-4 lg:pt-0 lg:justify-center"
             : isLead
               ? "sm:pt-5"
               : "sm:pt-4"

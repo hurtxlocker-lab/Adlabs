@@ -41,7 +41,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
       <Header corpusCount={allItems.length} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 pb-32 sm:pb-20 flex flex-col gap-10">
+      <main className="flex-1 adlabs-canvas py-8 sm:py-12 pb-32 sm:pb-20 flex flex-col gap-10 lg:gap-12">
         {/* Page Orientation */}
         <section className="flex flex-col gap-2 max-w-2xl">
           <h1 className="text-3xl sm:text-4xl font-normal tracking-tight text-[#f3f4f6] font-editorial">
@@ -68,7 +68,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
         </section>
 
         {/* Creative Field: Deterministic Cluster Rhythm */}
-        <section className="w-full flex flex-col gap-14 sm:gap-20">
+        <section className="w-full flex flex-col gap-14 sm:gap-20 2xl:gap-24">
           {items.length === 0 ? (
             <div className="w-full py-20 px-4 text-center border border-[#161820] bg-[#090b10] flex flex-col items-center justify-center gap-2">
               <p className="text-sm text-[#f3f4f6] font-medium font-sans">
@@ -88,18 +88,18 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                   <div
                     key={cluster.id}
                     data-cluster={cluster.id}
-                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
+                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 2xl:gap-16 items-start"
                   >
-                    {/* Dominant Lead Artifact (7 cols) */}
+                    {/* Dominant Lead Artifact (7 cols lg, 8 cols 2xl) */}
                     {lead && (
-                      <div className="lg:col-span-7">
+                      <div className="lg:col-span-7 2xl:col-span-8">
                         <CreativeCard item={lead.item} layoutRole="lead" />
                       </div>
                     )}
 
-                    {/* Stacked Supporting Companions (5 cols) */}
+                    {/* Stacked Supporting Companions (5 cols lg, 4 cols 2xl) */}
                     {companions.length > 0 && (
-                      <div className="lg:col-span-5 flex flex-col gap-8 lg:gap-10">
+                      <div className="lg:col-span-5 2xl:col-span-4 flex flex-col gap-8 lg:gap-10">
                         {companions.map((c) => (
                           <CreativeCard
                             key={c.item.id}
@@ -121,15 +121,15 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                   <div
                     key={cluster.id}
                     data-cluster={cluster.id}
-                    className="flex flex-col gap-10 lg:gap-14"
+                    className="flex flex-col gap-10 lg:gap-14 2xl:gap-16"
                   >
                     {/* Balanced Offset Duo (Side-by-Side) */}
                     {duo.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10 xl:gap-12 2xl:gap-16 items-start">
                         {duo.map((c, idx) => (
                           <div
                             key={c.item.id}
-                            className={idx === 1 ? "md:pt-8 lg:pt-14" : ""}
+                            className={idx === 1 ? "md:pt-8 lg:pt-14 2xl:pt-16" : ""}
                           >
                             <CreativeCard
                               item={c.item}
@@ -158,11 +158,11 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                 <div
                   key={cluster.id}
                   data-cluster={cluster.id}
-                  className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
+                  className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 2xl:gap-16 items-start"
                 >
-                  {/* Stacked Supporting Companions (5 cols left) */}
+                  {/* Stacked Supporting Companions (5 cols lg, 4 cols 2xl left) */}
                   {companions.length > 0 && (
-                    <div className="lg:col-span-5 flex flex-col gap-8 lg:gap-10">
+                    <div className="lg:col-span-5 2xl:col-span-4 flex flex-col gap-8 lg:gap-10 order-2 lg:order-1">
                       {companions.map((c) => (
                         <CreativeCard
                           key={c.item.id}
@@ -173,9 +173,9 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
                     </div>
                   )}
 
-                  {/* Dominant Lead Artifact (7 cols right) */}
+                  {/* Dominant Lead Artifact (7 cols lg, 8 cols 2xl right) */}
                   {lead && (
-                    <div className="lg:col-span-7">
+                    <div className="lg:col-span-7 2xl:col-span-8 order-1 lg:order-2">
                       <CreativeCard item={lead.item} layoutRole="lead" />
                     </div>
                   )}
@@ -188,7 +188,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
 
       {/* Quiet Grounded Footer */}
       <footer className="w-full border-t border-[#16181f] py-6 bg-[#050608] text-xs font-sans text-[#686e7b]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="adlabs-canvas flex flex-col sm:flex-row items-center justify-between gap-3">
           <span className="tracking-tight">AdLabs</span>
           <span className="font-mono text-xs text-[#8e95a2]">
             Factual Creative Observations
