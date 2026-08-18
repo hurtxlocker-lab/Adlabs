@@ -17,3 +17,4 @@ export * from "./card-media";
 export * from "./ad-observations";
 export * from "./source-account-observations";
 export * from "./ad-transparency-observations";
+export * from "./ad-discovery-index";

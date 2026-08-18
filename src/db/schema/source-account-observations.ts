@@ -1,4 +1,4 @@
-import { bigint, boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { sourceAccounts } from "./source-accounts";
 import { ingestionRuns } from "./ingestion-runs";
@@ -40,6 +40,9 @@ export const sourceAccountObservations = pgTable(
       table.observedAt.desc(),
     ),
     index("source_account_observations_run_idx").on(table.ingestionRunId),
+    uniqueIndex("source_account_observations_account_run_idx")
+      .on(table.sourceAccountId, table.ingestionRunId)
+      .where(sql`${table.ingestionRunId} IS NOT NULL`),
   ],
 );
 

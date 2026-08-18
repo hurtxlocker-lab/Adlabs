@@ -9,6 +9,7 @@ import { validateSourceAndPreparedMediaConsistency } from "./consistency";
 import { saveRawIngestionItem } from "./raw-items";
 import { saveSourceAccountObservation } from "./source-account-observations";
 import { saveAdTransparencyObservations } from "./ad-transparency-observations";
+import { projectAd, projectSourceAccount } from "@/discovery/projection";
 import {
   PreparedMediaMismatchError,
   type DbOrTx,
@@ -205,16 +206,30 @@ export async function persistPreparedObservedAd(
     };
   };
 
+  let result: PersistPreparedObservedAdResult;
+
   // If already inside an existing transaction, participate directly
   if (executor && "rollback" in executor) {
-    return executeAtomicPersistence(executor);
+    result = await executeAtomicPersistence(executor);
+  } else {
+    // Otherwise, wrap in an atomic per-item transaction
+    const client = executor ?? db;
+    result = await client.transaction(async (tx) => {
+      return executeAtomicPersistence(tx);
+    });
   }
 
-  // Otherwise, wrap in an atomic per-item transaction
-  const client = executor ?? db;
-  return client.transaction(async (tx) => {
-    return executeAtomicPersistence(tx);
-  });
+  // Post-commit: project ad into ad_discovery_index safely (non-blocking for evidence)
+  try {
+    await projectAd(result.ad.id);
+    if (result.accountObservationId) {
+      await projectSourceAccount(input.sourceAccountId);
+    }
+  } catch (err) {
+    console.error(`[Projector] Post-commit discovery projection failed for ad ${result.ad.id}:`, err);
+  }
+
+  return result;
 }
 
 /**
@@ -241,7 +256,7 @@ export async function persistObservedAd(
       tx,
     );
 
-    // 2. Upsert canonical ad
+    // 2. Upsert ad
     const adResult = await upsertAd(
       {
         sourceAccountId: input.sourceAccountId,
@@ -249,20 +264,21 @@ export async function persistObservedAd(
       },
       tx,
     );
+    const adId = adResult.ad.id;
 
-    // 3. Reconcile ad cards (DCO / Carousel / multi-card snapshots)
+    // 3. Reconcile ad cards
     const cardResult = await reconcileAdCards(
       {
-        adId: adResult.ad.id,
+        adId,
         cards: input.ad.cards ?? [],
       },
       tx,
     );
 
-    // 4. Create observation (final successful state marker for this item)
+    // 4. Create observation
     const observation = await createAdObservation(
       {
-        adId: adResult.ad.id,
+        adId,
         ingestionRunId: input.ingestionRunId,
         observedActive: input.ad.active ?? null,
         snapshotHash: input.snapshotHash ?? null,
@@ -311,14 +327,26 @@ export async function persistObservedAd(
     };
   };
 
-  // If already inside an existing transaction, participate directly
+  let result: PersistObservedAdResult;
+
   if (executor && "rollback" in executor) {
-    return executeItemPersistence(executor);
+    result = await executeItemPersistence(executor);
+  } else {
+    const client = executor ?? db;
+    result = await client.transaction(async (tx) => {
+      return executeItemPersistence(tx);
+    });
   }
 
-  // Otherwise, wrap in an atomic per-item transaction
-  const client = executor ?? db;
-  return client.transaction(async (tx) => {
-    return executeItemPersistence(tx);
-  });
+  // Post-commit: project ad into ad_discovery_index safely (non-blocking for evidence)
+  try {
+    await projectAd(result.ad.id);
+    if (result.accountObservationId) {
+      await projectSourceAccount(input.sourceAccountId);
+    }
+  } catch (err) {
+    console.error(`[Projector] Post-commit discovery projection failed for ad ${result.ad.id}:`, err);
+  }
+
+  return result;
 }
