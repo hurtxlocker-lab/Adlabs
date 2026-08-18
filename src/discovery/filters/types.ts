@@ -224,6 +224,16 @@ export interface FacetBandCount<K extends string = string> {
 }
 
 /**
+ * Brand facet item with display name and count.
+ * Returned from disjunctive brand facet (counts computed excluding brand_ids filter).
+ */
+export interface BrandFacetItem {
+  brandId: string;
+  brandName: string;
+  count: number;
+}
+
+/**
  * Value-count pair for categorical facets.
  */
 export interface FacetValueCount<T = string> {
@@ -250,6 +260,7 @@ export interface DiscoveryFacetsResult {
   euReachBands: FacetBandCount[];
   creativeReuseBands: FacetBandCount[];
   instagramFollowerBands: FacetBandCount[];
+  brands: BrandFacetItem[];
 }
 
 /**

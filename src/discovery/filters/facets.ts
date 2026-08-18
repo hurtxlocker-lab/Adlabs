@@ -1,5 +1,5 @@
 import { db as defaultDb } from "@/db/client";
-import { adDiscoveryIndex } from "@/db/schema";
+import { adDiscoveryIndex, brands } from "@/db/schema";
 import type { DbOrTx } from "@/ingestion/persistence/types";
 import { and, sql } from "drizzle-orm";
 import {
@@ -9,6 +9,7 @@ import {
 } from "./bands";
 import { compileDiscoveryPredicates } from "./predicates";
 import type {
+  BrandFacetItem,
   DiscoveryFacetsResult,
   DiscoveryFilterGroup,
   FacetBandCount,
@@ -34,6 +35,12 @@ interface TransparencyDbResult extends Record<string, unknown> {
   uk_false: string | number;
   br_true: string | number;
   br_false: string | number;
+}
+
+interface BrandFacetDbResult extends Record<string, unknown> {
+  brand_id: string;
+  brand_name: string;
+  cnt: string | number;
 }
 
 /**
@@ -62,7 +69,7 @@ export async function computeDiscoveryFacets(
     return preds.length > 0 ? and(...preds) : sql`1=1`;
   };
 
-  // Run facet queries concurrently
+  // Run facet queries concurrently (12 parallel SQL queries)
   const [
     mediaTypesRes,
     shapeFamiliesRes,
@@ -75,6 +82,7 @@ export async function computeDiscoveryFacets(
     euReachBandsRes,
     reuseBandsRes,
     igFollowerBandsRes,
+    brandsRes,
   ] = await Promise.all([
     // 1. Media Types (Excludes MEDIA_TYPE)
     dbClient.execute<QueryDbResult>(sql`
@@ -198,6 +206,19 @@ export async function computeDiscoveryFacets(
       WHERE ${getWhere("INSTAGRAM_FOLLOWERS")} AND ${adDiscoveryIndex.latestInstagramFollowers} IS NOT NULL
       GROUP BY band_key
     `),
+
+    // 12. Brands (Disjunctive — excludes IDENTITY group, joins brands for display name)
+    dbClient.execute<BrandFacetDbResult>(sql`
+      SELECT
+        ${adDiscoveryIndex.brandId} as brand_id,
+        ${brands.name} as brand_name,
+        count(*)::int as cnt
+      FROM ${adDiscoveryIndex}
+      INNER JOIN ${brands} ON ${brands.id} = ${adDiscoveryIndex.brandId}
+      WHERE ${getWhere("IDENTITY")}
+      GROUP BY ${adDiscoveryIndex.brandId}, ${brands.name}
+      ORDER BY cnt DESC, ${brands.name} ASC
+    `),
   ]);
 
   const mapCounts = (rows: unknown): FacetValueCount<string>[] => {
@@ -244,6 +265,15 @@ export async function computeDiscoveryFacets(
     br_false: 0,
   };
 
+  const brandList = Array.isArray(brandsRes)
+    ? (brandsRes as BrandFacetDbResult[])
+    : ((brandsRes as { rows?: BrandFacetDbResult[] })?.rows ?? []);
+  const mappedBrands: BrandFacetItem[] = brandList.map((r) => ({
+    brandId: String(r.brand_id),
+    brandName: String(r.brand_name),
+    count: Number(r.cnt),
+  }));
+
   return {
     mediaTypes: mapCounts(mediaTypesRes),
     shapeFamilies: mapCounts(shapeFamiliesRes) as FacetValueCount<CreativeShapeFamily>[],
@@ -269,5 +299,6 @@ export async function computeDiscoveryFacets(
     euReachBands: mapBands(euReachBandsRes, EU_REACH_BANDS),
     creativeReuseBands: mapBands(reuseBandsRes, CREATIVE_REUSE_BANDS),
     instagramFollowerBands: mapBands(igFollowerBandsRes, INSTAGRAM_FOLLOWER_BANDS),
+    brands: mappedBrands,
   };
 }
