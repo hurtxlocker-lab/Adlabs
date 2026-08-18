@@ -45,6 +45,7 @@ export interface EnsureSourceAccountInput {
 export interface StartIngestionRunInput {
   source: string;
   sourceAccountId: string;
+  startedAt?: Date;
   metadata?: Record<string, unknown>;
 }
 
@@ -53,6 +54,7 @@ export type IngestionRunFinalStatus = "SUCCEEDED" | "PARTIAL" | "FAILED";
 export interface FinishIngestionRunInput {
   ingestionRunId: string;
   status: IngestionRunFinalStatus;
+  finishedAt?: Date;
 
   sourceItemsCount: number;
   newAdsCount: number;
@@ -101,6 +103,7 @@ export interface CreateAdObservationInput {
   ingestionRunId: string;
   observedActive: boolean | null;
   snapshotHash?: string | null;
+  observedAt?: Date;
   metadata?: Record<string, unknown>;
 }
 
@@ -111,6 +114,7 @@ export interface PersistObservedAdInput {
   rawPayload: unknown;
   rawPayloadHash: string;
   snapshotHash?: string | null;
+  observedAt?: Date;
   observationMetadata?: Record<string, unknown>;
 }
 
@@ -171,6 +175,7 @@ export interface PersistPreparedObservedAdInput {
   rawPayloadHash?: string;
   preparedMedia: PreparedAdMedia;
   snapshotHash?: string | null;
+  observedAt?: Date;
   observationMetadata?: Record<string, unknown>;
 }
 

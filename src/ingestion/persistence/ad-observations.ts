@@ -41,7 +41,7 @@ export async function createAdObservation(
         observedActive: input.observedActive ?? null,
         snapshotHash: input.snapshotHash ?? null,
         metadata,
-        observedAt: sql`now()`,
+        observedAt: input.observedAt ?? sql`now()`,
       })
       .returning();
 

@@ -157,6 +157,7 @@ export async function persistPreparedObservedAd(
         ingestionRunId: input.ingestionRunId,
         observedActive: input.ad.active ?? null,
         snapshotHash: input.snapshotHash ?? null,
+        observedAt: input.observedAt,
         metadata: input.observationMetadata ?? {},
       },
       tx,
@@ -169,6 +170,7 @@ export async function persistPreparedObservedAd(
         {
           sourceAccountId: input.sourceAccountId,
           ingestionRunId: input.ingestionRunId,
+          observedAt: input.observedAt,
           data: input.ad.accountObservation,
         },
         tx,
@@ -282,6 +284,7 @@ export async function persistObservedAd(
         ingestionRunId: input.ingestionRunId,
         observedActive: input.ad.active ?? null,
         snapshotHash: input.snapshotHash ?? null,
+        observedAt: input.observedAt,
         metadata: input.observationMetadata ?? {},
       },
       tx,
@@ -294,6 +297,7 @@ export async function persistObservedAd(
         {
           sourceAccountId: input.sourceAccountId,
           ingestionRunId: input.ingestionRunId,
+          observedAt: input.observedAt,
           data: input.ad.accountObservation,
         },
         tx,

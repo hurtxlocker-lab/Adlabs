@@ -41,6 +41,7 @@ export async function startIngestionRun(
       source,
       sourceAccountId,
       status: "RUNNING",
+      startedAt: input.startedAt ?? sql`now()`,
       metadata: input.metadata ?? {},
     })
     .returning();
@@ -124,7 +125,7 @@ export async function finishIngestionRun(
     .update(ingestionRuns)
     .set({
       status: input.status,
-      finishedAt: sql`now()`,
+      finishedAt: input.finishedAt ?? sql`now()`,
       sourceItemsCount,
       newAdsCount,
       updatedAdsCount,
