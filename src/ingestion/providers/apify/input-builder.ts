@@ -17,6 +17,8 @@ export interface BuildCuriousCoderTaskInputParams {
   url: string;
   /** Operator's requested local limit (1..10). */
   limit: number;
+  /** Optional override for detailed scraping (defaults to true for rich enrichment). */
+  scrapeAdDetails?: boolean;
 }
 
 export interface CuriousCoderActorInput {
@@ -26,6 +28,7 @@ export interface CuriousCoderActorInput {
   "scrapePageAds.sortBy"?: string;
   "scrapePageAds.countryCode"?: string;
   "scrapePageAds.period"?: string;
+  scrapeAdDetails?: boolean;
   [key: string]: unknown;
 }
 
@@ -44,5 +47,6 @@ export function buildCuriousCoderTaskInput(
     "scrapePageAds.sortBy": "impressions_desc",
     "scrapePageAds.countryCode": "ALL",
     "scrapePageAds.period": "",
+    scrapeAdDetails: params.scrapeAdDetails ?? true,
   };
 }

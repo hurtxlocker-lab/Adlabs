@@ -56,6 +56,20 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
 
   afterAll(async () => {
     // Cleanup in strict reverse dependency order using explicit IDs only
+    // 0a. ad_transparency_observations
+    if (createdObservationIds.length > 0) {
+      await db
+        .delete(schema.adTransparencyObservations)
+        .where(inArray(schema.adTransparencyObservations.adObservationId, createdObservationIds));
+    }
+
+    // 0b. source_account_observations
+    if (createdSourceAccountIds.length > 0) {
+      await db
+        .delete(schema.sourceAccountObservations)
+        .where(inArray(schema.sourceAccountObservations.sourceAccountId, createdSourceAccountIds));
+    }
+
     // 1. ad_observations
     if (createdAdIds.length > 0) {
       await db
@@ -1790,5 +1804,118 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
     });
     expect(assetConflictingMime.id).toBe(assetNullMime.id);
     expect(assetConflictingMime.mimeType).toBe("image/webp"); // First canonical preserved!
+  });
+
+  it("42. Indian/non-regulated ad: core ad ingests, observation created, zero transparency rows exist, no null placeholder rows", async () => {
+    const run = await startIngestionRun({
+      source: "meta",
+      sourceAccountId: createdSourceAccountIds[0],
+      metadata: { collection_country_code: "IN" },
+    });
+    createdIngestionRunIds.push(run.id);
+
+    const indianAd: SourceAd = {
+      source: "meta",
+      sourceAdId: "meta_ad_indian_absence_test_1",
+      advertiser: {
+        sourcePageId: `page_${testPrefix}_01`,
+        name: "The Souled Store",
+      },
+      transparencyObservations: [], // No transparency disclosures in non-regulated Indian market
+      cards: [],
+      directMedia: [],
+      publisherPlatforms: ["facebook", "instagram"],
+      active: true,
+      raw: { id: "meta_ad_indian_absence_test_1", market: "IN" },
+    };
+
+    const result = await persistObservedAd({
+      sourceAccountId: createdSourceAccountIds[0],
+      ingestionRunId: run.id,
+      ad: indianAd,
+      rawPayload: indianAd.raw,
+      rawPayloadHash: "sha256:indian_ad_raw_1",
+    });
+
+    createdRawItemIds.push(result.rawItem.id);
+    createdAdIds.push(result.ad.id);
+    createdObservationIds.push(result.observation.id);
+
+    expect(result.adOutcome).toBe("created");
+    expect(result.observation.id).toBeDefined();
+    expect(result.transparencyObservationCount).toBe(0);
+
+    // Verify in database: zero transparency observation rows exist
+    const transparencyRows = await db
+      .select()
+      .from(schema.adTransparencyObservations)
+      .where(eq(schema.adTransparencyObservations.adObservationId, result.observation.id));
+
+    expect(transparencyRows).toHaveLength(0);
+  });
+
+  it("43. Partial regional transparency with absent total_reach persists row with NULL total_reach (never coerced to 0)", async () => {
+    const run = await startIngestionRun({
+      source: "meta",
+      sourceAccountId: createdSourceAccountIds[0],
+      metadata: { collection_country_code: "EU" },
+    });
+    createdIngestionRunIds.push(run.id);
+
+    const partialEuAd: SourceAd = {
+      source: "meta",
+      sourceAdId: "meta_ad_partial_transparency_test_1",
+      advertiser: {
+        sourcePageId: `page_${testPrefix}_01`,
+        name: "The Souled Store",
+      },
+      transparencyObservations: [
+        {
+          region: "EU",
+          totalReach: null, // Absent total reach
+          targetAgeMin: 18,
+          targetAgeMax: 65,
+          targetGender: "All",
+          targetCountries: ["ES"],
+          reachedCountries: ["ES"],
+          reachBreakdown: null,
+          providerPayload: { targets_eu: true },
+        },
+      ],
+      cards: [],
+      directMedia: [],
+      publisherPlatforms: ["facebook"],
+      active: true,
+      raw: { id: "meta_ad_partial_transparency_test_1" },
+    };
+
+    const result = await persistObservedAd({
+      sourceAccountId: createdSourceAccountIds[0],
+      ingestionRunId: run.id,
+      ad: partialEuAd,
+      rawPayload: partialEuAd.raw,
+      rawPayloadHash: "sha256:partial_transparency_raw_1",
+    });
+
+    createdRawItemIds.push(result.rawItem.id);
+    createdAdIds.push(result.ad.id);
+    createdObservationIds.push(result.observation.id);
+
+    expect(result.transparencyObservationCount).toBe(1);
+
+    // Verify in database: exactly 1 row exists with strictly NULL total_reach
+    const transparencyRows = await db
+      .select()
+      .from(schema.adTransparencyObservations)
+      .where(eq(schema.adTransparencyObservations.adObservationId, result.observation.id));
+
+    expect(transparencyRows).toHaveLength(1);
+    const row = transparencyRows[0];
+    expect(row.region).toBe("EU");
+    expect(row.totalReach).toBeNull(); // Strictly NULL, NEVER coerced to 0!
+    expect(row.targetAgeMin).toBe(18);
+    expect(row.targetAgeMax).toBe(65);
+    expect(row.targetCountries).toEqual(["ES"]);
+    expect(row.reachedCountries).toEqual(["ES"]);
   });
 });

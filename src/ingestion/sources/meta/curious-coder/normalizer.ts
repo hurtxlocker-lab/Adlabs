@@ -1,6 +1,8 @@
 import type {
+  SourceAccountObservationData,
   SourceAd,
   SourceAdCard,
+  SourceAdTransparencyObservation,
   SourceMedia,
 } from "@/ingestion/types";
 import type {
@@ -9,6 +11,10 @@ import type {
   CuriousCoderItem,
   CuriousCoderVideo,
 } from "./schema";
+import {
+  extractReachedCountries,
+  extractTargetCountries,
+} from "./country-helpers";
 
 /**
  * Pure helper to safely extract string copy from text or markup objects.
@@ -325,6 +331,229 @@ function normalizeCards(cards?: CuriousCoderCard[] | null): SourceAdCard[] {
  *  - Parent copy is never flattened into cards; card copy is never flattened into parent.
  *  - Raw provider payload references are preserved untouched.
  */
+/**
+ * Safely extracts regional transparency observations (EU, UK, BR) from a Curious Coder ad item.
+ */
+function extractTransparencyObservations(
+  item: CuriousCoderItem,
+): SourceAdTransparencyObservation[] {
+  try {
+    const rawAny = item as Record<string, unknown>;
+    const snapshotAny = (item.snapshot ?? {}) as Record<string, unknown>;
+    const transparencyByLoc =
+      (rawAny.transparency_by_location as Record<string, unknown> | undefined) ??
+      (snapshotAny.transparency_by_location as Record<string, unknown> | undefined);
+
+    if (!transparencyByLoc || typeof transparencyByLoc !== "object") {
+      return [];
+    }
+
+    const results: SourceAdTransparencyObservation[] = [];
+
+    // 1. EU Transparency
+    const eu = transparencyByLoc.eu_transparency as Record<string, unknown> | undefined;
+    if (eu && typeof eu === "object") {
+      const totalReach =
+        typeof eu.eu_total_reach === "number" || typeof eu.eu_total_reach === "bigint"
+          ? BigInt(eu.eu_total_reach)
+          : typeof eu.total_reach === "number" || typeof eu.total_reach === "bigint"
+            ? BigInt(eu.total_reach)
+            : null;
+
+      const ageAudience = eu.age_audience as { min?: number; max?: number } | undefined;
+      const targetAgeMin = typeof ageAudience?.min === "number" ? ageAudience.min : null;
+      const targetAgeMax = typeof ageAudience?.max === "number" ? ageAudience.max : null;
+      const targetGender = typeof eu.gender_audience === "string" ? eu.gender_audience : null;
+
+      results.push({
+        region: "EU",
+        totalReach,
+        targetAgeMin,
+        targetAgeMax,
+        targetGender,
+        targetCountries: extractTargetCountries(eu),
+        reachedCountries: extractReachedCountries(eu),
+        reachBreakdown: eu.age_country_gender_reach_breakdown ?? null,
+        providerPayload: eu,
+      });
+    }
+
+    // 2. UK Transparency
+    const uk = transparencyByLoc.uk_transparency as Record<string, unknown> | undefined;
+    if (uk && typeof uk === "object") {
+      const totalReach =
+        typeof uk.total_reach === "number" || typeof uk.total_reach === "bigint"
+          ? BigInt(uk.total_reach)
+          : null;
+
+      const ageAudience = uk.age_audience as { min?: number; max?: number } | undefined;
+      const targetAgeMin = typeof ageAudience?.min === "number" ? ageAudience.min : null;
+      const targetAgeMax = typeof ageAudience?.max === "number" ? ageAudience.max : null;
+      const targetGender = typeof uk.gender_audience === "string" ? uk.gender_audience : null;
+
+      results.push({
+        region: "UK",
+        totalReach,
+        targetAgeMin,
+        targetAgeMax,
+        targetGender,
+        targetCountries: extractTargetCountries(uk),
+        reachedCountries: extractReachedCountries(uk),
+        reachBreakdown: uk.age_country_gender_reach_breakdown ?? null,
+        providerPayload: uk,
+      });
+    }
+
+    // 3. BR Transparency
+    const br = transparencyByLoc.br_transparency as Record<string, unknown> | undefined;
+    if (br && typeof br === "object") {
+      const totalReach =
+        typeof br.total_reach === "number" || typeof br.total_reach === "bigint"
+          ? BigInt(br.total_reach)
+          : null;
+
+      const ageAudience = br.age_audience as { min?: number; max?: number } | undefined;
+      const targetAgeMin = typeof ageAudience?.min === "number" ? ageAudience.min : null;
+      const targetAgeMax = typeof ageAudience?.max === "number" ? ageAudience.max : null;
+      const targetGender = typeof br.gender_audience === "string" ? br.gender_audience : null;
+
+      results.push({
+        region: "BR",
+        totalReach,
+        targetAgeMin,
+        targetAgeMax,
+        targetGender,
+        targetCountries: extractTargetCountries(br),
+        reachedCountries: extractReachedCountries(br),
+        reachBreakdown: br.age_country_gender_reach_breakdown ?? null,
+        providerPayload: br,
+      });
+    }
+
+    return results;
+  } catch {
+    // Optional enrichment normalization must degrade gracefully without failing core normalization
+    return [];
+  }
+}
+
+/**
+ * Safely extracts mutable source account observation metadata from a Curious Coder ad item.
+ */
+function extractAccountObservation(
+  item: CuriousCoderItem,
+): SourceAccountObservationData | null {
+  try {
+    const rawAny = item as Record<string, unknown>;
+    const snapshotAny = (item.snapshot ?? {}) as Record<string, unknown>;
+    const advertiser =
+      (rawAny.advertiser as Record<string, unknown> | undefined) ??
+      (snapshotAny.advertiser as Record<string, unknown> | undefined);
+
+    if (!advertiser || typeof advertiser !== "object") {
+      return null;
+    }
+
+    const pageInfo = (
+      advertiser.ad_library_page_info as Record<string, unknown> | undefined
+    )?.page_info as Record<string, unknown> | undefined;
+    const pageSpend = (
+      advertiser.ad_library_page_info as Record<string, unknown> | undefined
+    )?.page_spend;
+    const pageAbout = (
+      advertiser.page as Record<string, unknown> | undefined
+    )?.about as { text?: string } | undefined;
+
+    if (!pageInfo || typeof pageInfo !== "object") {
+      return null;
+    }
+
+    const facebookLikes =
+      pageInfo.likes != null
+        ? typeof pageInfo.likes === "bigint"
+          ? pageInfo.likes
+          : BigInt(Number(pageInfo.likes))
+        : null;
+
+    const instagramFollowers =
+      pageInfo.ig_followers != null
+        ? typeof pageInfo.ig_followers === "bigint"
+          ? pageInfo.ig_followers
+          : BigInt(Number(pageInfo.ig_followers))
+        : null;
+
+    const facebookVerified =
+      pageInfo.page_verification === "BLUE_VERIFIED"
+        ? true
+        : pageInfo.page_verification === "NOT_VERIFIED"
+          ? false
+          : null;
+
+    const instagramVerified =
+      typeof pageInfo.ig_verification === "boolean"
+        ? pageInfo.ig_verification
+        : null;
+
+    const pageIsDeleted =
+      typeof pageInfo.page_is_deleted === "boolean"
+        ? pageInfo.page_is_deleted
+        : null;
+
+    const pageIsRestricted =
+      typeof pageInfo.page_is_restricted === "boolean"
+        ? pageInfo.page_is_restricted
+        : null;
+
+    const providerMetadata: Record<string, unknown> = {};
+    if (pageSpend != null) {
+      providerMetadata.page_spend = pageSpend;
+    }
+
+    return {
+      pageCategory:
+        typeof pageInfo.page_category === "string"
+          ? pageInfo.page_category
+          : null,
+      facebookLikes,
+      instagramUsername:
+        typeof pageInfo.ig_username === "string" ? pageInfo.ig_username : null,
+      instagramFollowers,
+      facebookVerified,
+      instagramVerified,
+      pageIsDeleted,
+      pageIsRestricted,
+      aboutText: typeof pageAbout?.text === "string" ? pageAbout.text : null,
+      profileImageUrl:
+        typeof pageInfo.profile_photo === "string"
+          ? pageInfo.profile_photo
+          : null,
+      coverImageUrl:
+        typeof pageInfo.page_cover_photo === "string"
+          ? pageInfo.page_cover_photo
+          : null,
+      providerMetadata:
+        Object.keys(providerMetadata).length > 0 ? providerMetadata : null,
+    };
+  } catch {
+    // Optional enrichment normalization must degrade gracefully
+    return null;
+  }
+}
+
+/**
+ * Pure domain normalizer: converts a validated CuriousCoderItem into canonical SourceAd.
+ *
+ * Rules:
+ *  - Advertiser is extracted strictly from top-level page fields.
+ *  - Publisher is extracted strictly from snapshot page fields (if present).
+ *  - Platform casing is strictly preserved without lowercasing.
+ *  - Branded content is mapped faithfully from snapshot.branded_content.
+ *  - Collation values are preserved without conceptual interpretation.
+ *  - HD video is preferred over SD video without duplicating physical assets.
+ *  - Original image is preferred over resized image.
+ *  - Parent copy is never flattened into cards; card copy is never flattened into parent.
+ *  - Raw provider payload references are preserved untouched.
+ */
 export function normalizeCuriousCoderAd(
   item: CuriousCoderItem,
   rawPayload?: unknown,
@@ -397,6 +626,10 @@ export function normalizeCuriousCoderAd(
   // 6. Ad Library URL
   const adLibraryUrl = item.ad_library_url ?? item.url ?? null;
 
+  // 7. Transparency & Account observations
+  const transparencyObservations = extractTransparencyObservations(item);
+  const accountObservation = extractAccountObservation(item);
+
   return {
     source: "meta",
     sourceAdId: item.ad_archive_id,
@@ -405,6 +638,8 @@ export function normalizeCuriousCoderAd(
     sourceCollationCount: item.collation_count ?? null,
 
     advertiser,
+    accountObservation,
+    transparencyObservations,
     publisher,
     brandedContent,
 

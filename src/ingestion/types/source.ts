@@ -34,6 +34,35 @@ export interface SourceAdCard {
   raw: unknown;
 }
 
+export type TransparencyRegion = "EU" | "UK" | "BR";
+
+export interface SourceAdTransparencyObservation {
+  region: TransparencyRegion;
+  totalReach?: bigint | number | null;
+  targetAgeMin?: number | null;
+  targetAgeMax?: number | null;
+  targetGender?: string | null;
+  targetCountries: string[];
+  reachedCountries: string[];
+  reachBreakdown?: unknown;
+  providerPayload?: Record<string, unknown> | null;
+}
+
+export interface SourceAccountObservationData {
+  pageCategory?: string | null;
+  facebookLikes?: bigint | number | null;
+  instagramUsername?: string | null;
+  instagramFollowers?: bigint | number | null;
+  facebookVerified?: boolean | null;
+  instagramVerified?: boolean | null;
+  pageIsDeleted?: boolean | null;
+  pageIsRestricted?: boolean | null;
+  aboutText?: string | null;
+  profileImageUrl?: string | null;
+  coverImageUrl?: string | null;
+  providerMetadata?: Record<string, unknown> | null;
+}
+
 export interface SourceAd {
   source: SourceName;
   sourceAdId: string;
@@ -46,6 +75,9 @@ export interface SourceAd {
     name?: string | null;
     url?: string | null;
   };
+
+  accountObservation?: SourceAccountObservationData | null;
+  transparencyObservations?: SourceAdTransparencyObservation[];
 
   publisher?: {
     sourcePageId?: string | null;

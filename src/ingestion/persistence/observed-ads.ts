@@ -7,6 +7,8 @@ import { upsertAd } from "./ads";
 import { reconcileCardMedia } from "./card-media";
 import { validateSourceAndPreparedMediaConsistency } from "./consistency";
 import { saveRawIngestionItem } from "./raw-items";
+import { saveSourceAccountObservation } from "./source-account-observations";
+import { saveAdTransparencyObservations } from "./ad-transparency-observations";
 import {
   PreparedMediaMismatchError,
   type DbOrTx,
@@ -19,7 +21,7 @@ import {
 /**
  * Persists an already-prepared observed ad in ONE short, atomic database transaction.
  *
- * This is the PRIMARY / PREFERRED M0 single-item database persistence API.
+ * This is the PRIMARY / PREFERRED single-item database persistence API.
  *
  * Atomic Transaction Scope (Phase B):
  *  1. validateSourceAndPreparedMediaConsistency (ensures prepared media belongs to this SourceAd)
@@ -28,12 +30,16 @@ import {
  *  4. reconcileAdCards (deterministic card upsert and stale-card cleanup)
  *  5. reconcileAdMedia (direct ad media snapshot)
  *  6. reconcileCardMedia (card media snapshot by (ad_id, position) + stale card cleanup)
- *  7. createAdObservation (append-only observation — MUST BE LAST)
+ *  7. createAdObservation (parent observation event)
+ *  8. saveSourceAccountObservation (mutable account metadata observation)
+ *  9. saveAdTransparencyObservations (observation-owned regional transparency rows)
  *
- * Invariants:
+ * Invariants (Refined Observation Doctrine):
  *  - ZERO network calls (no HTTP, no DNS, no R2) occur inside this transaction.
- *  - Observation creation is strictly the final step; if cards or media fail, no observation exists.
- *  - If any step fails, ALL seven database mutations roll back atomically.
+ *  - All canonical ad/card/media mutations complete before observational evidence is appended.
+ *    ad_observation is the parent observation event; observation-owned child facts such as
+ *    transparency are written immediately afterward inside the same atomic transaction.
+ *  - If any step fails, ALL database mutations roll back atomically.
  *  - R2 objects created in Phase A remain intact on rollback (content-addressed, globally reusable).
  *  - Ingestion run row lives outside this transaction and survives.
  */
@@ -143,7 +149,7 @@ export async function persistPreparedObservedAd(
       }
     }
 
-    // 7. Create observation (FINAL successful state marker for this item snapshot)
+    // 7. Create observation (state marker for this item snapshot)
     const observation = await createAdObservation(
       {
         adId,
@@ -155,6 +161,35 @@ export async function persistPreparedObservedAd(
       tx,
     );
 
+    // 8. Persist source account observation if detailed metadata exists
+    let accountObservationId: string | null = null;
+    if (input.ad.accountObservation) {
+      accountObservationId = await saveSourceAccountObservation(
+        {
+          sourceAccountId: input.sourceAccountId,
+          ingestionRunId: input.ingestionRunId,
+          data: input.ad.accountObservation,
+        },
+        tx,
+      );
+    }
+
+    // 9. Persist regional transparency observations linked to this ad observation
+    let transparencyObservationCount = 0;
+    if (
+      input.ad.transparencyObservations &&
+      input.ad.transparencyObservations.length > 0
+    ) {
+      const savedTrans = await saveAdTransparencyObservations(
+        {
+          adObservationId: observation.id,
+          transparencyObservations: input.ad.transparencyObservations,
+        },
+        tx,
+      );
+      transparencyObservationCount = savedTrans.length;
+    }
+
     return {
       rawItem,
       ad: adResult.ad,
@@ -165,6 +200,8 @@ export async function persistPreparedObservedAd(
       deletedDirectMediaCount: directMediaResult.deletedCount,
       deletedCardMediaCount,
       observation,
+      transparencyObservationCount,
+      accountObservationId,
     };
   };
 
@@ -234,12 +271,43 @@ export async function persistObservedAd(
       tx,
     );
 
+    // 5. Persist source account observation if detailed metadata exists
+    let accountObservationId: string | null = null;
+    if (input.ad.accountObservation) {
+      accountObservationId = await saveSourceAccountObservation(
+        {
+          sourceAccountId: input.sourceAccountId,
+          ingestionRunId: input.ingestionRunId,
+          data: input.ad.accountObservation,
+        },
+        tx,
+      );
+    }
+
+    // 6. Persist regional transparency observations linked to this ad observation
+    let transparencyObservationCount = 0;
+    if (
+      input.ad.transparencyObservations &&
+      input.ad.transparencyObservations.length > 0
+    ) {
+      const savedTrans = await saveAdTransparencyObservations(
+        {
+          adObservationId: observation.id,
+          transparencyObservations: input.ad.transparencyObservations,
+        },
+        tx,
+      );
+      transparencyObservationCount = savedTrans.length;
+    }
+
     return {
       rawItem,
       ad: adResult.ad,
       adOutcome: adResult.outcome,
       cards: cardResult.cards,
       observation,
+      transparencyObservationCount,
+      accountObservationId,
     };
   };
 

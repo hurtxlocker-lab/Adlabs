@@ -3,6 +3,7 @@ import { relations, sql } from "drizzle-orm";
 import { brands } from "./brands";
 import { ingestionRuns } from "./ingestion-runs";
 import { ads } from "./ads";
+import { sourceAccountObservations } from "./source-account-observations";
 
 export const sourceAccounts = pgTable(
   "source_accounts",
@@ -44,5 +45,6 @@ export const sourceAccountsRelations = relations(
     }),
     ingestionRuns: many(ingestionRuns),
     ads: many(ads),
+    observations: many(sourceAccountObservations),
   }),
 );

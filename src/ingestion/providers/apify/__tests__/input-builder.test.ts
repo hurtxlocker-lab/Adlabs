@@ -20,6 +20,7 @@ describe("Curious Coder Actor Input Builder Contract", () => {
     expect(input.count).toBe(10); // clamped to MIN_PROVIDER_COUNT (10)
     expect(input["scrapePageAds.activeStatus"]).toBe("all");
     expect(input["scrapePageAds.sortBy"]).toBe("impressions_desc");
+    expect(input.scrapeAdDetails).toBe(true);
 
     // Strictly ensure stale/deprecated fields are never emitted
     expect(input).not.toHaveProperty("startUrls");

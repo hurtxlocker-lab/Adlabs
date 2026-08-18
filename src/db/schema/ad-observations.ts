@@ -2,6 +2,7 @@ import { boolean, index, jsonb, pgTable, text, timestamp, unique, uuid } from "d
 import { relations, sql } from "drizzle-orm";
 import { ads } from "./ads";
 import { ingestionRuns } from "./ingestion-runs";
+import { adTransparencyObservations } from "./ad-transparency-observations";
 
 export const adObservations = pgTable(
   "ad_observations",
@@ -35,7 +36,7 @@ export const adObservations = pgTable(
 
 export const adObservationsRelations = relations(
   adObservations,
-  ({ one }) => ({
+  ({ one, many }) => ({
     ad: one(ads, {
       fields: [adObservations.adId],
       references: [ads.id],
@@ -44,5 +45,6 @@ export const adObservationsRelations = relations(
       fields: [adObservations.ingestionRunId],
       references: [ingestionRuns.id],
     }),
+    transparencyObservations: many(adTransparencyObservations),
   }),
 );

@@ -12,6 +12,8 @@ export type DbTransaction = PgTransaction<
   ExtractTablesWithRelations<typeof schema>
 >;
 export type DbOrTx = DbClient | DbTransaction;
+export type DbExecutor = DbOrTx;
+
 
 export type BrandRow = typeof schema.brands.$inferSelect;
 export type SourceAccountRow = typeof schema.sourceAccounts.$inferSelect;
@@ -118,6 +120,8 @@ export interface PersistObservedAdResult {
   adOutcome: "created" | "updated";
   cards: AdCardRow[];
   observation: AdObservationRow;
+  transparencyObservationCount?: number;
+  accountObservationId?: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -180,6 +184,8 @@ export interface PersistPreparedObservedAdResult {
   deletedDirectMediaCount: number;
   deletedCardMediaCount: number;
   observation: AdObservationRow;
+  transparencyObservationCount?: number;
+  accountObservationId?: string | null;
 }
 
 export interface StoredMediaRef {

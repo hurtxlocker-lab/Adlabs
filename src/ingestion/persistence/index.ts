@@ -10,5 +10,7 @@ export * from "./media-assets";
 export * from "./ad-media";
 export * from "./card-media";
 export * from "./ad-observations";
+export * from "./source-account-observations";
+export * from "./ad-transparency-observations";
 export * from "./observed-ads";
 export * from "./consistency";
