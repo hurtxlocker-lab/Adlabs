@@ -1,9 +1,9 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { getAdLibraryItemsByIds } from "@/features/ad-library";
 import { Header } from "@/components/navigation/header";
 import { FilterPanel } from "@/features/discover/components/filter-panel";
-import { CreativeCard } from "@/features/discover/components/creative-card";
-import { partitionIntoClusters } from "@/features/discover/utils/cluster-rhythm";
+import { PackedField } from "@/features/discover/components/packed-field/packed-field";
 import {
   queryDiscoveryAds,
   queryDiscoveryFacets,
@@ -18,10 +18,10 @@ import {
  *
  * Data query flow:
  *   URL searchParams
- *     ↓ parseDiscoveryFiltersFromParams()    — pure URL codec
+ *     ↓ parseDiscoveryFiltersFromParams()             — pure URL codec
  *     ↓ queryDiscoveryAds() + queryDiscoveryFacets()  — parallel (filter engine)
- *     ↓ getAdLibraryItemsByIds()             — bulk hydration (4-5 SQL queries)
- *     ↓ partitionIntoClusters()              — Packed Field layout
+ *     ↓ getAdLibraryItemsByIds()                      — bulk hydration (4-5 SQL queries)
+ *     ↓ PackedField                                   — rectilinear authored plate topology
  *
  * Logical DB query fanout on a default (no-filter) request:
  *   1  queryDiscoveryAds — 1 SQL query (filter + sort + limit)
@@ -30,11 +30,6 @@ import {
  *      derivatives) — bounded bulk, never one query per ad
  *
  *   Total logical: ~18 SQL operations, all parallelized where possible.
- *
- * Search: text search is intentionally removed from V1 Discover.
- * Rationale: legacy LIKE search queries a different data universe (canonical ads table)
- * which would cause filter counts and displayed results to diverge from the discovery
- * engine. Search will return as a first-class composable discovery predicate.
  */
 
 export const dynamic = "force-dynamic";
@@ -59,8 +54,6 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   // Bulk hydrate ordered ad IDs — 4-5 bounded SQL queries, order preserved
   const adIds = result.items.map((x) => x.adId);
   const items = await getAdLibraryItemsByIds(adIds);
-
-  const clusters = partitionIntoClusters(items);
 
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
@@ -88,120 +81,12 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
           </Suspense>
         </section>
 
-        {/* Creative field */}
-        <section className="w-full flex flex-col gap-14 sm:gap-20 2xl:gap-24">
+        {/* Creative field — Packed Field Topology */}
+        <section className="w-full">
           {items.length === 0 ? (
             <EmptyState />
           ) : (
-            clusters.map((cluster) => {
-              if (cluster.type === "lead-companion") {
-                const lead = cluster.items[0];
-                const companions = cluster.items.slice(1);
-
-                return (
-                  <div
-                    key={cluster.id}
-                    data-cluster={cluster.id}
-                    className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 2xl:gap-16 items-start"
-                  >
-                    {lead && (
-                      <div className="lg:col-span-7 2xl:col-span-8">
-                        <CreativeCard
-                          item={lead.item}
-                          layoutRole="lead"
-                          clusterId={cluster.id}
-                        />
-                      </div>
-                    )}
-                    {companions.length > 0 && (
-                      <div className="lg:col-span-5 2xl:col-span-4 flex flex-col gap-8 lg:gap-10">
-                        {companions.map((c) => (
-                          <CreativeCard
-                            key={c.item.id}
-                            item={c.item}
-                            layoutRole="supporting"
-                            clusterId={cluster.id}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (cluster.type === "offset-duo-wide") {
-                const duo = cluster.items.slice(0, 2);
-                const wide = cluster.items[2];
-
-                return (
-                  <div
-                    key={cluster.id}
-                    data-cluster={cluster.id}
-                    className="flex flex-col gap-10 lg:gap-14 2xl:gap-16"
-                  >
-                    {duo.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10 xl:gap-12 2xl:gap-16 items-start">
-                        {duo.map((c, idx) => (
-                          <div
-                            key={c.item.id}
-                            className={idx === 1 ? "md:pt-8 lg:pt-14 2xl:pt-16" : ""}
-                          >
-                            <CreativeCard
-                              item={c.item}
-                              layoutRole="offset"
-                              clusterId={cluster.id}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {wide && (
-                      <div className="w-full pt-2 sm:pt-4 border-t border-[#12141c]/60">
-                        <CreativeCard
-                          item={wide.item}
-                          layoutRole="wide"
-                          clusterId={cluster.id}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              // mirrored-lead
-              const companions = cluster.items.slice(0, 2);
-              const lead = cluster.items[2];
-
-              return (
-                <div
-                  key={cluster.id}
-                  data-cluster={cluster.id}
-                  className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 2xl:gap-16 items-start"
-                >
-                  {companions.length > 0 && (
-                    <div className="lg:col-span-5 2xl:col-span-4 flex flex-col gap-8 lg:gap-10 order-2 lg:order-1">
-                      {companions.map((c) => (
-                        <CreativeCard
-                          key={c.item.id}
-                          item={c.item}
-                          layoutRole="supporting"
-                          clusterId={cluster.id}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {lead && (
-                    <div className="lg:col-span-7 2xl:col-span-8 order-1 lg:order-2">
-                      <CreativeCard
-                        item={lead.item}
-                        layoutRole="lead"
-                        clusterId={cluster.id}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            <PackedField items={items} />
           )}
         </section>
       </main>
@@ -227,6 +112,12 @@ function EmptyState() {
       <p className="text-xs text-[#686e7b] font-sans">
         Try adjusting your filters to expand the result set.
       </p>
+      <Link
+        href="/discover"
+        className="mt-2 text-xs font-sans text-[#d46b38] hover:text-[#e07945] underline underline-offset-4 transition-colors"
+      >
+        Clear all filters
+      </Link>
     </div>
   );
 }
