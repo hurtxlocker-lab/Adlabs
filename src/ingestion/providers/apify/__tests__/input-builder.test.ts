@@ -43,6 +43,28 @@ describe("Curious Coder Actor Input Builder Contract", () => {
     expect(input15.count).toBe(15);
   });
 
+  it("handles countryCode parameter correctly", () => {
+    const inputWithCountry = buildCuriousCoderTaskInput({
+      url: sampleUrl,
+      limit: 10,
+      countryCode: "IN",
+    });
+    expect(inputWithCountry["scrapePageAds.countryCode"]).toBe("IN");
+
+    const inputLower = buildCuriousCoderTaskInput({
+      url: sampleUrl,
+      limit: 10,
+      countryCode: "us",
+    });
+    expect(inputLower["scrapePageAds.countryCode"]).toBe("US");
+
+    const inputDefault = buildCuriousCoderTaskInput({
+      url: sampleUrl,
+      limit: 10,
+    });
+    expect(inputDefault["scrapePageAds.countryCode"]).toBe("ALL");
+  });
+
   it("passes constructed inputOverrides to task.call()", async () => {
     const taskCall = vi.fn().mockResolvedValue({
       id: "run-test-1",

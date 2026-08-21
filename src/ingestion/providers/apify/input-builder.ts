@@ -15,10 +15,18 @@ export const MIN_PROVIDER_COUNT = 10;
 export interface BuildCuriousCoderTaskInputParams {
   /** Valid Meta Ad Library search/view URL. */
   url: string;
-  /** Operator's requested local limit (1..10). */
+  /** Operator's requested local limit (or target count). */
   limit: number;
+  /** Country code to scrape for (e.g. "IN", "US", "ALL"). Defaults to "ALL". */
+  countryCode?: string;
   /** Optional override for detailed scraping (defaults to true for rich enrichment). */
   scrapeAdDetails?: boolean;
+  /** Optional active status filter (defaults to "all"). */
+  activeStatus?: string;
+  /** Optional sort order (defaults to "impressions_desc"). */
+  sortBy?: string;
+  /** Optional period (defaults to ""). */
+  period?: string;
 }
 
 export interface CuriousCoderActorInput {
@@ -43,10 +51,10 @@ export function buildCuriousCoderTaskInput(
   return {
     urls: [{ url: params.url }],
     count: providerCount,
-    "scrapePageAds.activeStatus": "all",
-    "scrapePageAds.sortBy": "impressions_desc",
-    "scrapePageAds.countryCode": "ALL",
-    "scrapePageAds.period": "",
+    "scrapePageAds.activeStatus": params.activeStatus ?? "all",
+    "scrapePageAds.sortBy": params.sortBy ?? "impressions_desc",
+    "scrapePageAds.countryCode": params.countryCode ? params.countryCode.trim().toUpperCase() : "ALL",
+    "scrapePageAds.period": params.period ?? "",
     scrapeAdDetails: params.scrapeAdDetails ?? true,
   };
 }
