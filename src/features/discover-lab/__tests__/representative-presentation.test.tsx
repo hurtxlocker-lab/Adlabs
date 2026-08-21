@@ -6,8 +6,8 @@ import type {
   AdLibraryCreativeVariation,
   AdLibraryMediaItem,
 } from "@/features/ad-library/types";
-import { PackedSlotCard } from "../components/packed-slot-card";
-import { PACKED_FIELD_TEMPLATE_V1 } from "../templates/packed-field-v1";
+import { PackedSlotCard } from "@/features/discover/components/packed-field/packed-slot-card";
+import { PACKED_FIELD_TEMPLATE_V1 } from "@/features/discover/templates/packed-field-v1";
 
 function makeMedia(
   id: string,

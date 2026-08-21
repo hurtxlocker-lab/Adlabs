@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PackedSlotCard } from "../components/packed-slot-card";
+import { PackedSlotCard } from "@/features/discover/components/packed-field/packed-slot-card";
 import type { AdLibraryItem } from "@/features/ad-library/types";
-import type { PackedFieldSlot } from "../types";
+import type { PackedFieldSlot } from "@/features/discover/types/packed-field";
 import { resolveCreativeShape } from "@/features/discover/utils/creative-shape";
 
 const mockPepperfrySquareItem: AdLibraryItem = {

@@ -4,12 +4,12 @@ import {
   getItemPreferenceRank,
   assignCreativesToSlots,
   SLOT_ASSIGNMENT_ORDER,
-} from "../utils/seed-assignment";
-import { PACKED_FIELD_TEMPLATE_V1 } from "../templates/packed-field-v1";
+} from "@/features/discover/utils/seed-assignment";
+import { PACKED_FIELD_TEMPLATE_V1 } from "@/features/discover/templates/packed-field-v1";
 import {
   getSlotPreferredWidthCss,
   SLOT_MAX_HEIGHT_PX,
-} from "../components/packed-slot-card";
+} from "@/features/discover/components/packed-field/packed-slot-card";
 import type { AdLibraryItem } from "@/features/ad-library/types";
 
 function createMockItem(id: string, width: number, height: number): AdLibraryItem {

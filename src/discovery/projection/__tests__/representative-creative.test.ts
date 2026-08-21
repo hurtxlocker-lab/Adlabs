@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveRepresentativeCreativeFacts } from "../representative-creative";
-import { resolveDiscoverRepresentativeCreative } from "@/features/discover-lab/utils/representative-creative";
+import { resolveDiscoverRepresentativeCreative } from "@/features/discover/utils/representative-creative";
 import type { AdLibraryItem } from "@/features/ad-library/types";
 
 describe("Representative Creative Resolution & Domain Parity", () => {

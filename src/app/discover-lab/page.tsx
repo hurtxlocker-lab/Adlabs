@@ -1,10 +1,18 @@
 import { getAdLibraryItems } from "@/features/ad-library";
 import { Header } from "@/components/navigation/header";
-import { GenerativeField } from "@/features/discover-lab/components/generative-field";
+import { PackedField } from "@/features/discover/components/packed-field/packed-field";
 
 export const dynamic = "force-dynamic";
 
-export default async function DiscoverLabPage() {
+interface DiscoverLabPageProps {
+  searchParams?: Promise<{
+    seed?: string | string[];
+  }>;
+}
+
+export default async function DiscoverLabPage({ searchParams }: DiscoverLabPageProps) {
+  const resolvedParams = searchParams ? await searchParams : undefined;
+  const seed = typeof resolvedParams?.seed === "string" ? resolvedParams.seed : undefined;
   const items = await getAdLibraryItems();
 
   return (
@@ -19,7 +27,7 @@ export default async function DiscoverLabPage() {
               Discover Lab
             </h1>
             <span className="font-mono text-[11px] uppercase tracking-wider text-[#d46b38] bg-[#d46b3815] border border-[#d46b3830] px-2 py-0.5 rounded-[3px]">
-              Packed Field v1
+              Packed Field v1 Experiment
             </span>
           </div>
           <p className="text-sm text-[#9da2ad] font-sans leading-relaxed">
@@ -35,7 +43,7 @@ export default async function DiscoverLabPage() {
             </p>
           </div>
         ) : (
-          <GenerativeField items={items} />
+          <PackedField items={items} baseSeed={seed} />
         )}
       </main>
 

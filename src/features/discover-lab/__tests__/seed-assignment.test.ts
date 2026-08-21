@@ -3,8 +3,8 @@ import {
   assignCreativesToSlots,
   isItemCompatibleWithSlot,
   partitionCreativesIntoPlates,
-} from "../utils/seed-assignment";
-import { PACKED_FIELD_TEMPLATE_V1 } from "../templates/packed-field-v1";
+} from "@/features/discover/utils/seed-assignment";
+import { PACKED_FIELD_TEMPLATE_V1 } from "@/features/discover/templates/packed-field-v1";
 import type { AdLibraryItem } from "@/features/ad-library/types";
 
 function createMockItem(

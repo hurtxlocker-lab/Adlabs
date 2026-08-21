@@ -4,9 +4,9 @@ import type {
   AdLibraryCreativeVariation,
   AdLibraryMediaItem,
 } from "@/features/ad-library/types";
-import { resolveDiscoverRepresentativeCreative } from "../utils/representative-creative";
-import { isItemCompatibleWithSlot, getItemPreferenceRank } from "../utils/seed-assignment";
-import { PACKED_FIELD_TEMPLATE_V1 } from "../templates/packed-field-v1";
+import { resolveDiscoverRepresentativeCreative } from "@/features/discover/utils/representative-creative";
+import { isItemCompatibleWithSlot, getItemPreferenceRank } from "@/features/discover/utils/seed-assignment";
+import { PACKED_FIELD_TEMPLATE_V1 } from "@/features/discover/templates/packed-field-v1";
 
 function makeMedia(
   id: string,

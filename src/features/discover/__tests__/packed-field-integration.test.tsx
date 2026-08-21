@@ -10,7 +10,7 @@ import {
 } from "@/features/discover/utils/seed-assignment";
 import { PACKED_FIELD_TEMPLATE_V1 } from "@/features/discover/templates/packed-field-v1";
 import { resolveDiscoverRepresentativeCreative as resolveProd } from "@/features/discover/utils/representative-creative";
-import { resolveDiscoverRepresentativeCreative as resolveLab } from "@/features/discover-lab/utils/representative-creative";
+import { resolveDomainRepresentativeCreative } from "@/domain/creative/representative-creative";
 
 // Helper to create mock AdLibraryItems with specific shapes and media
 function createMockItem(
@@ -173,18 +173,35 @@ describe("Packed Field Production Integration", () => {
     expect(result.unassignedItems).toHaveLength(0);
   });
 
-  it("F. representative-first resolution produces identical results between production and lab", () => {
+  it("F. representative-first resolution produces identical results between Discover read model and domain resolver", () => {
     const dcoItem = createMockItem("dco-1", "DcoBrand", "IMAGE", 1080, 1080, 3);
 
     const prodRes = resolveProd(dcoItem);
-    const labRes = resolveLab(dcoItem);
+    const domainRes = resolveDomainRepresentativeCreative({
+      id: dcoItem.id,
+      headline: dcoItem.headline,
+      primaryText: dcoItem.primaryText,
+      variations: dcoItem.variations.map((v) => ({
+        id: v.id,
+        position: v.position,
+        headline: v.headline,
+        body: v.body,
+        media: v.media.map((m) => ({
+          id: m.id,
+          mediaType: m.mediaType,
+          role: m.role,
+          width: m.width ?? null,
+          height: m.height ?? null,
+        })),
+      })),
+    });
 
-    expect(prodRes.sourceAdId).toBe(labRes.sourceAdId);
-    expect(prodRes.shapeFamily).toBe(labRes.shapeFamily);
-    expect(prodRes.aspectRatio).toBe(labRes.aspectRatio);
-    expect(prodRes.headline).toBe(labRes.headline);
+    expect(prodRes.sourceAdId).toBe(domainRes.sourceAdId);
+    expect(prodRes.shapeFamily).toBe(domainRes.shapeFamily);
+    expect(prodRes.aspectRatio).toBe(domainRes.aspectRatio);
+    expect(prodRes.headline).toBe(domainRes.headline);
     expect(prodRes.isMultiVariation).toBe(true);
-    expect(labRes.isMultiVariation).toBe(true);
+    expect(domainRes.isMultiVariation).toBe(true);
   });
 
   it("G. variations are not rendered as browsing mosaics (single representative card)", () => {
