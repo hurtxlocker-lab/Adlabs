@@ -141,6 +141,38 @@ body {
 }
 
 /* ==========================================================================
+   Astryx interaction surface — AdLabs token mapping
+   Astryx provides interaction behavior and structural CSS only. Every visible
+   token is remapped to AdLabs values inside the .adlabs-astryx scope.
+   color-scheme: dark forces the neutral theme's dark branch (light-dark()
+   resolution) so no light theme can ever appear inside Astryx surfaces.
+   ========================================================================== */
+.adlabs-astryx {
+  color-scheme: dark;
+  --color-accent: var(--accent-primary);
+  --color-accent-muted: var(--accent-subtle);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-disabled: var(--text-muted);
+  --color-icon-primary: var(--text-primary);
+  --color-icon-secondary: var(--text-secondary);
+  --color-icon-accent: var(--accent-primary);
+  --color-background-surface: var(--surface-raised);
+  --color-background-body: var(--surface-canvas);
+  --color-background-card: var(--surface-raised);
+  --color-background-popover: var(--surface-elevated);
+  --color-background-inverted: var(--surface-canvas);
+  --color-border: var(--line-subtle);
+  --color-border-emphasized: var(--line-border);
+  --color-on-accent: #ffffff;
+  --color-shadow: transparent;
+  --radius-none: 0px;
+  --radius-inner: 0px;
+  --radius-element: 0px;
+  --radius-container: 0px;
+}
+
+/* ==========================================================================
    Pass 3A: Interaction Language Foundation
    States: SEE -> NOTICE -> ENGAGE -> UNDERSTAND
    ========================================================================== */

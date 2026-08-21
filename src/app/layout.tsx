@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
+// Astryx precompiled CSS (behavior + structural only). Imported BEFORE
+// globals.css so Tailwind's cascade layers are declared after Astryx's and
+// Tailwind utilities win conflicts. No Astryx reset is imported; AdLabs tokens
+// remain authoritative via the .adlabs-astryx scope.
+import "@astryxdesign/core/astryx.css";
+import "@astryxdesign/theme-neutral/theme.css";
 import "./globals.css";
 
 const geistSans = Geist({
