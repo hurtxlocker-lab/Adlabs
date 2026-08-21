@@ -123,6 +123,16 @@ describe("URL Filter Codec — parseDiscoveryFiltersFromParams", () => {
     const f = parseDiscoveryFiltersFromParams(sp({ ig_followers_min: "50000" }));
     expect(f.instagramFollowersMin).toBe(50000);
   });
+
+  it("parses cta (ctaTypes) — uppercased", () => {
+    const f = parseDiscoveryFiltersFromParams(sp({ cta: "SHOP_NOW,learn_more" }));
+    expect(f.ctaTypes).toEqual(["SHOP_NOW", "LEARN_MORE"]);
+  });
+
+  it("parses target_country (targetCountries) — uppercased", () => {
+    const f = parseDiscoveryFiltersFromParams(sp({ target_country: "es,FR" }));
+    expect(f.targetCountries).toEqual(["ES", "FR"]);
+  });
 });
 
 describe("URL Filter Codec — buildDiscoveryFilterParams", () => {
@@ -177,6 +187,26 @@ describe("URL Filter Codec — buildDiscoveryFilterParams", () => {
     const params = buildDiscoveryFilterParams({ brandIds: [id] });
     const f = parseDiscoveryFiltersFromParams(params);
     expect(f.brandIds).toEqual([id]);
+  });
+
+  it("round-trips cta (deduped, sorted, uppercased)", () => {
+    const params = buildDiscoveryFilterParams({ ctaTypes: ["shop_now", "SHOP_NOW", "LEARN_MORE"] });
+    expect(params.get("cta")).toBe("LEARN_MORE,SHOP_NOW");
+    const f = parseDiscoveryFiltersFromParams(params);
+    expect(f.ctaTypes).toEqual(["LEARN_MORE", "SHOP_NOW"]);
+  });
+
+  it("round-trips target_country (uppercased, sorted)", () => {
+    const params = buildDiscoveryFilterParams({ targetCountries: ["fr", "ES", "ES"] });
+    expect(params.get("target_country")).toBe("ES,FR");
+    const f = parseDiscoveryFiltersFromParams(params);
+    expect(f.targetCountries).toEqual(["ES", "FR"]);
+  });
+
+  it("omits cta/target_country when empty", () => {
+    const params = buildDiscoveryFilterParams({ ctaTypes: [], targetCountries: [] });
+    expect(params.has("cta")).toBe(false);
+    expect(params.has("target_country")).toBe(false);
   });
 });
 
@@ -240,6 +270,8 @@ describe("DISCOVERY_URL_PARAMS — stable contract", () => {
     expect(DISCOVERY_URL_PARAMS.hasUk).toBe("has_uk");
     expect(DISCOVERY_URL_PARAMS.euReachMin).toBe("eu_reach_min");
     expect(DISCOVERY_URL_PARAMS.euReachMax).toBe("eu_reach_max");
+    expect(DISCOVERY_URL_PARAMS.cta).toBe("cta");
+    expect(DISCOVERY_URL_PARAMS.targetCountry).toBe("target_country");
     expect(DISCOVERY_URL_PARAMS.sort).toBe("sort");
   });
 });

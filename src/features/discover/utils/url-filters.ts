@@ -40,6 +40,8 @@ export const DISCOVERY_URL_PARAMS = {
   euReachMax: "eu_reach_max",
   platform: "platform",
   pageCategory: "page_category",
+  cta: "cta",
+  targetCountry: "target_country",
   igFollowersMin: "ig_followers_min",
   igFollowersMax: "ig_followers_max",
   sort: "sort",
@@ -203,6 +205,18 @@ export function parseDiscoveryFiltersFromParams(
   const igMax = parsePositiveInt(getParam(params, DISCOVERY_URL_PARAMS.igFollowersMax));
   if (igMax !== undefined) filter.instagramFollowersMax = igMax;
 
+  // cta=<CTA,CTA>
+  const ctaTypes = splitCsv(getParam(params, DISCOVERY_URL_PARAMS.cta)).map((s) =>
+    s.toUpperCase(),
+  );
+  if (ctaTypes.length > 0) filter.ctaTypes = ctaTypes;
+
+  // target_country=<ISO,ISO>
+  const targetCountries = splitCsv(getParam(params, DISCOVERY_URL_PARAMS.targetCountry)).map(
+    (c) => c.toUpperCase(),
+  );
+  if (targetCountries.length > 0) filter.targetCountries = targetCountries;
+
   return filter;
 }
 
@@ -316,6 +330,20 @@ export function buildDiscoveryFilterParams(
     params.set(DISCOVERY_URL_PARAMS.igFollowersMin, String(filter.instagramFollowersMin));
   if (filter.instagramFollowersMax !== undefined)
     params.set(DISCOVERY_URL_PARAMS.igFollowersMax, String(filter.instagramFollowersMax));
+
+  if (filter.ctaTypes && filter.ctaTypes.length > 0) {
+    params.set(
+      DISCOVERY_URL_PARAMS.cta,
+      [...new Set(filter.ctaTypes.map((s) => s.toUpperCase()))].sort().join(","),
+    );
+  }
+
+  if (filter.targetCountries && filter.targetCountries.length > 0) {
+    params.set(
+      DISCOVERY_URL_PARAMS.targetCountry,
+      [...new Set(filter.targetCountries.map((c) => c.toUpperCase()))].sort().join(","),
+    );
+  }
 
   if (sort && sort !== "RECENTLY_SEEN") {
     params.set(DISCOVERY_URL_PARAMS.sort, sort);
