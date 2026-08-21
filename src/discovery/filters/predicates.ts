@@ -47,17 +47,20 @@ export function compileDiscoveryPredicates(
   }
 
   // 3. Running Days
+  // Cutoffs are bound as ISO strings, not raw Dates: the postgres@3 driver's
+  // timestamptz Bind serializer crashes (Buffer.byteLength) on Date params,
+  // while string params serialize correctly. Semantically identical.
   if (!excluded.has("RUNNING_DAYS")) {
     if (filters.runningMinDays !== undefined) {
       const minCutoff = new Date(now.getTime() - filters.runningMinDays * 24 * 60 * 60 * 1000);
       predicates.push(
-        sql`${adDiscoveryIndex.startDate} IS NOT NULL AND ${adDiscoveryIndex.startDate} <= ${minCutoff}`,
+        sql`${adDiscoveryIndex.startDate} IS NOT NULL AND ${adDiscoveryIndex.startDate} <= ${minCutoff.toISOString()}`,
       );
     }
     if (filters.runningMaxDays !== undefined) {
       const maxCutoff = new Date(now.getTime() - filters.runningMaxDays * 24 * 60 * 60 * 1000);
       predicates.push(
-        sql`${adDiscoveryIndex.startDate} IS NOT NULL AND ${adDiscoveryIndex.startDate} >= ${maxCutoff}`,
+        sql`${adDiscoveryIndex.startDate} IS NOT NULL AND ${adDiscoveryIndex.startDate} >= ${maxCutoff.toISOString()}`,
       );
     }
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { normalizeDiscoveryFilters } from "../normalize";
 import { compileDiscoveryPredicates } from "../predicates";
 import { getDiscoverySortClauses } from "../sort";
@@ -227,6 +228,42 @@ describe("Discovery Filters — Unit Tests", () => {
 
       const reachClauses = getDiscoverySortClauses("EU_REACH_DESC");
       expect(reachClauses.length).toBe(3);
+    });
+  });
+
+  describe("Predicate Compilation — Running Days (date binding regression)", () => {
+    // Regression: the postgres@3.4.9 driver's timestamptz Bind serializer
+    // crashes (Buffer.byteLength) when handed a raw Date param. The running
+    // cutoffs must serialize as strings.
+    const compileParams = (filter: Record<string, number | undefined>) => {
+      const normalized = normalizeDiscoveryFilters(filter);
+      const preds = compileDiscoveryPredicates({
+        filters: normalized,
+        now: new Date("2026-08-01T00:00:00.000Z"),
+      });
+      const dialect = new PgDialect();
+      const query = (
+        dialect as unknown as {
+          sqlToQuery(sql: unknown): { sql: string; params: unknown[] };
+        }
+      ).sqlToQuery(preds[0]);
+      return query.params;
+    };
+
+    it("binds ISO-string cutoffs, not raw Date params (min-days branch)", () => {
+      const params = compileParams({ runningMinDays: 30 });
+      expect(params.length).toBeGreaterThan(0);
+      for (const p of params) {
+        expect(typeof p).toBe("string");
+      }
+    });
+
+    it("binds ISO-string cutoffs for the max-days branch too", () => {
+      const params = compileParams({ runningMaxDays: 7 });
+      expect(params.length).toBeGreaterThan(0);
+      for (const p of params) {
+        expect(typeof p).toBe("string");
+      }
     });
   });
 });
