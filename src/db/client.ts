@@ -43,13 +43,10 @@ const globalForDb = globalThis as unknown as {
 const sql =
   globalForDb._pgClient ??
   postgres(env.DATABASE_URL, {
-    // postgres.js will auto-detect SSL requirement from the host.
-    // Supabase always requires SSL for pooler connections.
     ssl: "require",
-    // Disable prepare in transaction-mode pooling if using port 6543.
-    // Session Pooler (port 5432) supports prepared statements — leave
-    // this at the default (prepare: true) unless you switch to
-    // Transaction Pooler mode.
+    max: 1,
+    idle_timeout: 1,
+    connect_timeout: 10,
   });
 
 if (process.env.NODE_ENV !== "production") {

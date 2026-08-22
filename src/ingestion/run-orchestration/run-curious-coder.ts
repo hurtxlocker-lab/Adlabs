@@ -2,6 +2,7 @@ import { redactUrl } from "@/ingestion/media/url-safety";
 import { ingestNormalizedAd as defaultIngestNormalizedAd } from "@/ingestion/media-orchestration";
 import {
   MediaPreparationError,
+  MissingRepresentativeMediaError,
   PreparedCardNotFoundError,
 } from "@/ingestion/media-orchestration/errors";
 import {
@@ -46,7 +47,10 @@ function sanitizeErrorMessage(message: string): string {
  * Does NOT guess from message text or stack traces.
  */
 function classifyIngestionError(err: unknown): IngestionFailureStage {
-  if (err instanceof MediaPreparationError) {
+  if (
+    err instanceof MediaPreparationError ||
+    err instanceof MissingRepresentativeMediaError
+  ) {
     return "prepare_media";
   }
 

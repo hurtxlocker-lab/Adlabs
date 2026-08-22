@@ -16,7 +16,7 @@ import {
 } from "../projector";
 import type { SourceAd } from "@/ingestion/types";
 
-describe("Discovery Projection Integration", () => {
+describe("Discovery Projection Integration", { timeout: 30000 }, () => {
   const testPrefix = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const createdBrandIds: string[] = [];
   const createdSourceAccountIds: string[] = [];
@@ -70,35 +70,57 @@ describe("Discovery Projection Integration", () => {
         .where(inArray(schema.adObservations.adId, createdAdIds));
     }
 
-    // 3. raw_ingestion_items
+    // 3. ad_media, card_media, ad_cards (must precede ads deletion)
+    if (createdAdIds.length > 0) {
+      await db
+        .delete(schema.adMedia)
+        .where(inArray(schema.adMedia.adId, createdAdIds));
+
+      const cardRows = await db
+        .select({ id: schema.adCards.id })
+        .from(schema.adCards)
+        .where(inArray(schema.adCards.adId, createdAdIds));
+      const cardIds = cardRows.map((c) => c.id);
+
+      if (cardIds.length > 0) {
+        await db
+          .delete(schema.cardMedia)
+          .where(inArray(schema.cardMedia.adCardId, cardIds));
+        await db
+          .delete(schema.adCards)
+          .where(inArray(schema.adCards.id, cardIds));
+      }
+    }
+
+    // 4. raw_ingestion_items
     if (createdRawItemIds.length > 0) {
       await db
         .delete(schema.rawIngestionItems)
         .where(inArray(schema.rawIngestionItems.id, createdRawItemIds));
     }
 
-    // 4. ads
+    // 5. ads
     if (createdAdIds.length > 0) {
       await db
         .delete(schema.ads)
         .where(inArray(schema.ads.id, createdAdIds));
     }
 
-    // 5. ingestion_runs
+    // 6. ingestion_runs
     if (createdIngestionRunIds.length > 0) {
       await db
         .delete(schema.ingestionRuns)
         .where(inArray(schema.ingestionRuns.id, createdIngestionRunIds));
     }
 
-    // 6. source_accounts
+    // 7. source_accounts
     if (createdSourceAccountIds.length > 0) {
       await db
         .delete(schema.sourceAccounts)
         .where(inArray(schema.sourceAccounts.id, createdSourceAccountIds));
     }
 
-    // 7. brands
+    // 8. brands
     if (createdBrandIds.length > 0) {
       await db
         .delete(schema.brands)
@@ -668,8 +690,8 @@ describe("Discovery Projection Integration", () => {
   });
 
   it("6. rebuildDiscoveryIndex executes batch projection idempotently", async () => {
-    const result = await rebuildDiscoveryIndex({ chunkSize: 20 });
-    expect(result.totalProjected).toBeGreaterThanOrEqual(createdAdIds.length);
+    const result = await rebuildDiscoveryIndex({ adIds: createdAdIds, chunkSize: 20 });
+    expect(result.totalProjected).toBe(createdAdIds.length);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
-  }, 60000);
+  });
 });

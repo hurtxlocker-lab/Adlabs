@@ -136,7 +136,7 @@ export function deriveActiveTokens(
 
   (filter.pageCategories ?? []).forEach((pc) =>
     tokens.push({
-      label: pc,
+      label: `Category: ${pc}`,
       onRemove: () => handlers.toggleStringArray("pageCategories", pc),
     }),
   );

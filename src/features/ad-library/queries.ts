@@ -9,14 +9,19 @@ import {
   cardMedia,
   mediaAssets,
   mediaDerivatives,
+  adDiscoveryIndex,
+  sourceAccountObservations,
+  adObservations,
+  adTransparencyObservations,
 } from "@/db/schema";
 import { resolveMediaUrl } from "@/storage";
-import { eq, inArray, desc, and, or, ilike } from "drizzle-orm";
+import { eq, inArray, desc, and, or, ilike, ne } from "drizzle-orm";
 import type {
   AdLibraryItem,
   AdLibraryCardItem,
   AdLibraryMediaItem,
   AdLibraryQueryParams,
+  AdInspectDossierFacts,
 } from "./types";
 import { resolveCreativeVariations, sanitizeDisplayCopy } from "./utils";
 
@@ -620,6 +625,7 @@ export async function getAdLibraryItemById(
       id: ads.id,
       source: ads.source,
       sourceAdId: ads.sourceAdId,
+      sourceAccountId: ads.sourceAccountId,
       displayFormat: ads.displayFormat,
       primaryText: ads.primaryText,
       headline: ads.headline,
@@ -648,8 +654,8 @@ export async function getAdLibraryItemById(
 
   const row = adRows[0]!;
 
-  // Direct media
-  const mediaRows = await db
+  // 1. Direct media query
+  const mediaRowsPromise = db
     .select({
       mediaAssetId: mediaAssets.id,
       mediaType: mediaAssets.mediaType,
@@ -665,8 +671,8 @@ export async function getAdLibraryItemById(
     .where(eq(adMedia.adId, id))
     .orderBy(adMedia.position);
 
-  // Cards
-  const cardRows = await db
+  // 2. Cards query
+  const cardRowsPromise = db
     .select({
       cardId: adCards.id,
       position: adCards.position,
@@ -681,8 +687,49 @@ export async function getAdLibraryItemById(
     .where(eq(adCards.adId, id))
     .orderBy(adCards.position);
 
+  // 3. Discovery projection row query
+  const discoveryRowPromise = db
+    .select()
+    .from(adDiscoveryIndex)
+    .where(eq(adDiscoveryIndex.adId, id))
+    .limit(1);
+
+  // 4. Latest source account observation query
+  const accountObsRowPromise = db
+    .select()
+    .from(sourceAccountObservations)
+    .where(eq(sourceAccountObservations.sourceAccountId, row.sourceAccountId))
+    .orderBy(desc(sourceAccountObservations.observedAt))
+    .limit(1);
+
+  // 5. Direct transparency observations query for this ad
+  const transparencyRowsPromise = db
+    .select({
+      region: adTransparencyObservations.region,
+      totalReach: adTransparencyObservations.totalReach,
+      targetAgeMin: adTransparencyObservations.targetAgeMin,
+      targetAgeMax: adTransparencyObservations.targetAgeMax,
+      targetGender: adTransparencyObservations.targetGender,
+      targetCountries: adTransparencyObservations.targetCountries,
+      reachedCountries: adTransparencyObservations.reachedCountries,
+      observedAt: adTransparencyObservations.observedAt,
+    })
+    .from(adTransparencyObservations)
+    .innerJoin(adObservations, eq(adObservations.id, adTransparencyObservations.adObservationId))
+    .where(eq(adObservations.adId, id))
+    .orderBy(desc(adTransparencyObservations.observedAt));
+
+  const [mediaRows, cardRows, [discoveryRow], [accountObsRow], transparencyRows] = await Promise.all([
+    mediaRowsPromise,
+    cardRowsPromise,
+    discoveryRowPromise,
+    accountObsRowPromise,
+    transparencyRowsPromise,
+  ]);
+
   const cardIds = cardRows.map((c) => c.cardId);
 
+  // 5. Card media query (if any cards)
   let cardMediaRows: {
     adCardId: string;
     mediaAssetId: string;
@@ -712,6 +759,39 @@ export async function getAdLibraryItemById(
       .innerJoin(mediaAssets, eq(cardMedia.mediaAssetId, mediaAssets.id))
       .where(inArray(cardMedia.adCardId, cardIds))
       .orderBy(cardMedia.position);
+  }
+
+  // 6. Sibling deployments query (matching same brand_id and representative_media_sha256)
+  const repSha = discoveryRow?.representativeMediaSha256 ?? null;
+  let siblingRows: {
+    id: string;
+    sourceAdId: string;
+    firstSeenAt: Date;
+    lastSeenAt: Date;
+    hasEuEvidence: boolean;
+    hasUkEvidence: boolean;
+  }[] = [];
+
+  if (repSha) {
+    siblingRows = await db
+      .select({
+        id: adDiscoveryIndex.adId,
+        sourceAdId: adDiscoveryIndex.sourceAdId,
+        firstSeenAt: adDiscoveryIndex.firstSeenAt,
+        lastSeenAt: adDiscoveryIndex.lastSeenAt,
+        hasEuEvidence: adDiscoveryIndex.hasEuTransparencyEvidence,
+        hasUkEvidence: adDiscoveryIndex.hasUkTransparencyEvidence,
+      })
+      .from(adDiscoveryIndex)
+      .where(
+        and(
+          eq(adDiscoveryIndex.brandId, row.brandId),
+          eq(adDiscoveryIndex.representativeMediaSha256, repSha),
+          ne(adDiscoveryIndex.adId, id),
+        ),
+      )
+      .orderBy(desc(adDiscoveryIndex.lastSeenAt))
+      .limit(10);
   }
 
   // Collect video source IDs
@@ -798,6 +878,73 @@ export async function getAdLibraryItemById(
 
   const variations = resolveCreativeVariations(sourceCards);
 
+  // Compute canonical running days
+  let runningDays: number | null = null;
+  const startDate = discoveryRow?.startDate ?? null;
+  if (startDate) {
+    const refEnd = row.isActiveObserved ? new Date() : row.lastSeenAt;
+    const diffMs = refEnd.getTime() - new Date(startDate).getTime();
+    runningDays = diffMs >= 0 ? Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24))) : 0;
+  } else if (row.firstSeenAt && row.lastSeenAt) {
+    const refEnd = row.isActiveObserved ? new Date() : row.lastSeenAt;
+    const diffMs = refEnd.getTime() - row.firstSeenAt.getTime();
+    runningDays = diffMs >= 0 ? Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24))) : 0;
+  }
+
+  const primaryMedia = directMedia.find((m) => m.role !== "preview") ?? directMedia[0];
+  const durationMs = discoveryRow?.videoDurationMs ?? null;
+  const width = primaryMedia?.width ?? null;
+  const height = primaryMedia?.height ?? null;
+  const aspectRatio = discoveryRow?.representativeAspectRatio
+    ? Number(discoveryRow.representativeAspectRatio)
+    : width && height ? width / height : null;
+
+  const euObs = transparencyRows.find((t) => t.region === "EU");
+  const ukObs = transparencyRows.find((t) => t.region === "UK");
+
+  const dossier: AdInspectDossierFacts = {
+    startDate,
+    runningDays,
+    exactCreativeReuseCount: discoveryRow?.exactCreativeReuseCount ?? null,
+    pageCategory: discoveryRow?.latestPageCategory ?? accountObsRow?.pageCategory ?? null,
+    instagramUsername: accountObsRow?.instagramUsername ?? null,
+    instagramFollowers: discoveryRow?.latestInstagramFollowers ?? accountObsRow?.instagramFollowers ?? null,
+    instagramVerified: discoveryRow?.latestInstagramVerified ?? accountObsRow?.instagramVerified ?? null,
+    facebookLikes: discoveryRow?.latestFacebookLikes ?? accountObsRow?.facebookLikes ?? null,
+    facebookVerified: discoveryRow?.latestFacebookVerified ?? accountObsRow?.facebookVerified ?? null,
+    aboutText: accountObsRow?.aboutText ?? null,
+    hasEuTransparencyEvidence: Boolean(euObs) || (discoveryRow?.hasEuTransparencyEvidence ?? false),
+    latestEuTotalReach: euObs?.totalReach ?? discoveryRow?.latestEuTotalReach ?? null,
+    latestEuTransparencyObservedAt: euObs?.observedAt ?? discoveryRow?.latestEuTransparencyObservedAt ?? null,
+    latestEuTargetAgeMin: euObs?.targetAgeMin ?? discoveryRow?.latestEuTargetAgeMin ?? null,
+    latestEuTargetAgeMax: euObs?.targetAgeMax ?? discoveryRow?.latestEuTargetAgeMax ?? null,
+    latestEuTargetGender: euObs?.targetGender ?? discoveryRow?.latestEuTargetGender ?? null,
+    euReachedCountries: euObs?.reachedCountries ?? (discoveryRow?.reachedCountries ?? []),
+    euTargetCountries: euObs?.targetCountries ?? (discoveryRow?.targetCountries ?? []),
+    hasUkTransparencyEvidence: Boolean(ukObs) || (discoveryRow?.hasUkTransparencyEvidence ?? false),
+    latestUkTotalReach: ukObs?.totalReach ?? discoveryRow?.latestUkTotalReach ?? null,
+    latestUkTransparencyObservedAt: ukObs?.observedAt ?? discoveryRow?.latestUkTransparencyObservedAt ?? null,
+    latestUkTargetAgeMin: ukObs?.targetAgeMin ?? discoveryRow?.latestUkTargetAgeMin ?? null,
+    latestUkTargetAgeMax: ukObs?.targetAgeMax ?? discoveryRow?.latestUkTargetAgeMax ?? null,
+    latestUkTargetGender: ukObs?.targetGender ?? discoveryRow?.latestUkTargetGender ?? null,
+    ukReachedCountries: ukObs?.reachedCountries ?? [],
+    ukTargetCountries: ukObs?.targetCountries ?? [],
+    targetCountries: discoveryRow?.targetCountries ?? [],
+    reachedCountries: discoveryRow?.reachedCountries ?? [],
+    videoDurationMs: durationMs,
+    aspectRatio,
+    width,
+    height,
+    siblingDeployments: siblingRows.map((s) => ({
+      id: s.id,
+      sourceAdId: s.sourceAdId,
+      firstSeenAt: s.firstSeenAt,
+      lastSeenAt: s.lastSeenAt,
+      hasEuEvidence: s.hasEuEvidence,
+      hasUkEvidence: s.hasUkEvidence,
+    })),
+  };
+
   return {
     id: row.id,
     source: row.source,
@@ -823,5 +970,6 @@ export async function getAdLibraryItemById(
     sourceCards,
     variations,
     cards: sourceCards,
+    dossier,
   };
 }

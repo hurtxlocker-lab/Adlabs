@@ -19,26 +19,26 @@
 
 import { CheckboxList, CheckboxListItem } from "@astryxdesign/core/CheckboxList";
 import { MultiSelector } from "@astryxdesign/core/MultiSelector";
-import { Popover, usePopover } from "@astryxdesign/core/Popover";
+import { Popover } from "@astryxdesign/core/Popover";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Switch } from "@astryxdesign/core/Switch";
-import {
-  useFocusTrap,
-  useListFocus,
-  useTypeahead,
-} from "@astryxdesign/core/hooks";
+import { Tooltip } from "@astryxdesign/core/Tooltip";
+import { TabList, Tab } from "@astryxdesign/core/TabList";
+import { Collapsible } from "@astryxdesign/core/Collapsible";
+import { Divider } from "@astryxdesign/core/Divider";
 
 export {
   CheckboxList,
   CheckboxListItem,
+  Collapsible,
+  Divider,
   MultiSelector,
   Popover,
   Selector,
   Switch,
-  useFocusTrap,
-  useListFocus,
-  usePopover,
-  useTypeahead,
+  Tab,
+  TabList,
+  Tooltip,
 };
 
 /**

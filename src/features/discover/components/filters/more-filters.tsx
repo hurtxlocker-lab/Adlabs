@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * MoreFiltersPopover — ONE Astryx-backed popover surface with four labeled
- * groups (Creative / Account / Delivery / Evidence).
+ * MoreFiltersPopover — Secondary filter controls in AdLabs Discover.
  *
- * Group visibility is facet-driven: a group renders only when its dimensions
- * have evidence (or an active selection to preserve). Nothing is hard-coded to
- * corpus counts.
+ * Contains:
+ *  - Creative: CTA type, Publisher platform, Exact creative reuse
+ *  - Account: Instagram follower bands
+ *  - Delivery: Target countries
+ *  - Evidence: UK transparency evidence
  *
  * Astryx owns the popover layer: focus trapping, keyboard navigation, Escape
- * and outside-click dismissal, focus restoration, and positioning. AdLabs owns
- * all visuals through the .adlabs-astryx token scope + className.
+ * and outside-click dismissal, focus restoration, and positioning.
  */
 
 import {
@@ -18,14 +18,15 @@ import {
   CheckboxListItem,
   MultiSelector,
   Popover,
-  Switch,
 } from "@/components/ui/astryx";
 import type {
   DiscoveryFacetsResult,
   DiscoveryFilterInput,
 } from "@/discovery/filters/types";
+import { CREATIVE_REUSE_BANDS } from "@/discovery/filters/bands";
 import { countryLabel } from "./country-labels";
 import { BandSelectFilter } from "./band-select-filter";
+import { detectReuseBandKey, REUSE_BAND_LABELS } from "./bands";
 
 const IG_FOLLOWER_BAND_MIN: Record<string, number> = {
   LT_10K: 0,
@@ -74,9 +75,28 @@ export function MoreFiltersContent({
 }: MoreFiltersContentProps) {
   const ctaOptions = facets.ctaTypes;
   const platformOptions = facets.publisherPlatforms;
-  const pageCategoryOptions = facets.pageCategories;
   const targetCountryOptions = facets.targetCountries;
   const ukCount = facets.transparencyEvidence.UK.true;
+
+  const reuseKey = detectReuseBandKey(filter);
+  const reuseOptions = facets.creativeReuseBands
+    .filter((b) => b.count > 0 || b.key === reuseKey)
+    .map((b) => ({
+      key: b.key,
+      label: REUSE_BAND_LABELS[b.key] ?? b.label,
+    }));
+
+  const handleReuseSelect = (key: string | null) => {
+    if (!key) {
+      onClearRange("exactCreativeReuseMin", "exactCreativeReuseMax");
+      return;
+    }
+    const band = CREATIVE_REUSE_BANDS.find((b) => b.key === key);
+    if (!band) return;
+    const min = Number(band.min);
+    const max = band.max === null ? undefined : Number(band.max) - 1;
+    onSetRange("exactCreativeReuseMin", "exactCreativeReuseMax", min, max);
+  };
 
   const igFollowerBands = facets.instagramFollowerBands.filter(
     (b) =>
@@ -105,16 +125,16 @@ export function MoreFiltersContent({
     );
   };
 
-  const showCreative = ctaOptions.length > 0 || platformOptions.length > 0;
-  const showAccount =
-    facets.brands.length > 0 ||
-    pageCategoryOptions.length > 0 ||
-    igFollowerBands.length > 0;
+  const showCreative =
+    ctaOptions.length > 0 ||
+    platformOptions.length > 0 ||
+    reuseOptions.length > 0;
+  const showAccount = igFollowerBands.length > 0;
   const showDelivery = targetCountryOptions.length > 0;
   const showEvidence = ukCount > 0 || filter.hasUkTransparencyEvidence === true;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 p-1">
       {showCreative && (
         <div className="flex flex-col gap-3">
           <GroupHeading>Creative</GroupHeading>
@@ -154,46 +174,21 @@ export function MoreFiltersContent({
               ))}
             </CheckboxList>
           )}
+          {reuseOptions.length > 0 && (
+            <BandSelectFilter
+              id="more-creative-reuse"
+              label="Exact creative reuse"
+              options={reuseOptions}
+              selectedKey={reuseKey}
+              onSelect={handleReuseSelect}
+            />
+          )}
         </div>
       )}
 
       {showAccount && (
         <div className="flex flex-col gap-3">
           <GroupHeading>Account</GroupHeading>
-          {facets.brands.length > 0 && (
-            <MultiSelector
-              label="Brand"
-              isLabelHidden
-              size="sm"
-              variant="input"
-              triggerDisplay="labels"
-              maxBadges={2}
-              options={facets.brands.map((b) => ({
-                value: b.brandId,
-                label: b.brandName,
-              }))}
-              value={filter.brandIds ?? []}
-              onChange={(v) => onSetStringArray("brandIds", v)}
-            />
-          )}
-          {pageCategoryOptions.length > 0 && (
-            <CheckboxList
-              label="Page category"
-              isLabelHidden
-              density="compact"
-              value={filter.pageCategories ?? []}
-              onChange={(v) => onSetStringArray("pageCategories", v)}
-            >
-              {pageCategoryOptions.map((pc) => (
-                <CheckboxListItem
-                  key={pc.value}
-                  label={pc.value}
-                  value={pc.value}
-                  endContent={<CountBadge count={pc.count} />}
-                />
-              ))}
-            </CheckboxList>
-          )}
           {igFollowerBands.length > 0 && (
             <BandSelectFilter
               id="ig-followers"
@@ -233,14 +228,20 @@ export function MoreFiltersContent({
         <div className="flex flex-col gap-3">
           <GroupHeading>Evidence</GroupHeading>
           <div className="flex items-center gap-2">
-            <Switch
-              label={`UK evidence${ukCount > 0 ? ` · ${ukCount}` : ""}`}
-              size="sm"
-              value={filter.hasUkTransparencyEvidence === true}
-              onChange={(checked) =>
-                onSetBoolean("hasUkTransparencyEvidence", checked)
+            <CheckboxList
+              label="UK Evidence"
+              isLabelHidden
+              density="compact"
+              value={filter.hasUkTransparencyEvidence === true ? ["true"] : []}
+              onChange={(values) =>
+                onSetBoolean("hasUkTransparencyEvidence", values.includes("true"))
               }
-            />
+            >
+              <CheckboxListItem
+                label={`UK transparency${ukCount > 0 ? ` · ${ukCount}` : ""}`}
+                value="true"
+              />
+            </CheckboxList>
           </div>
         </div>
       )}
@@ -260,6 +261,8 @@ export function MoreFiltersPopover({
   triggerClassName,
   ...contentProps
 }: MoreFiltersPopoverProps) {
+  const isSelected = badgeCount !== undefined && badgeCount > 0;
+
   return (
     <Popover
       label={triggerLabel}
@@ -267,7 +270,7 @@ export function MoreFiltersPopover({
       alignment="start"
       width={360}
       content={
-        <div className="max-h-[70vh] overflow-y-auto">
+        <div className="max-h-[70vh] overflow-y-auto font-sans">
           <MoreFiltersContent {...contentProps} />
         </div>
       }
@@ -276,15 +279,21 @@ export function MoreFiltersPopover({
         type="button"
         className={
           triggerClassName ??
-          "inline-flex items-center gap-1 px-2.5 py-1 text-xs font-sans border border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] transition-colors cursor-pointer"
+          `inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
+            isSelected
+              ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
+              : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
+          }`
         }
+        aria-label={`More filters (${badgeCount ?? 0} active)`}
       >
-        {triggerLabel}
-        {badgeCount !== undefined && badgeCount > 0 && (
+        <span>{triggerLabel}</span>
+        {isSelected && (
           <span className="font-mono text-[10px] text-[#d46b38]">
-            {badgeCount}
+            · {badgeCount}
           </span>
         )}
+        <span className="text-[10px] text-[#686e7b]" aria-hidden="true">▾</span>
       </button>
     </Popover>
   );

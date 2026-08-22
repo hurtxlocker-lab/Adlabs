@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { MediaPreparationError } from "@/ingestion/media-orchestration/errors";
+import {
+  MediaPreparationError,
+  MissingRepresentativeMediaError,
+} from "@/ingestion/media-orchestration/errors";
 import {
   MediaAssetConflictError,
   SourceAccountOwnershipConflictError,
@@ -593,5 +596,43 @@ describe("runCuriousCoderIngestion (Unit Tests)", () => {
     expect(result.failures[0].sourceAdId).toBe("ad_wrong_page");
     expect(result.failures[0].message).toContain("page_other_999");
     expect(result.failures[0].message).toContain("page_123");
+  });
+
+  it("18. MissingRepresentativeMediaError: classified as stage 'prepare_media', isolates failure, preserves run lifecycle", async () => {
+    const mocks = createBaseMocks();
+    const items = [
+      createValidProviderItem("ad_no_media"),
+      createValidProviderItem("ad_with_media"),
+    ];
+
+    const mockIngest: IngestNormalizedAdFn = vi.fn(async ({ sourceAd }) => {
+      if (sourceAd.sourceAdId === "ad_no_media") {
+        throw new MissingRepresentativeMediaError("ad_no_media", "no valid media assets");
+      }
+      return {
+        adId: "ad_with_media",
+        adOutcome: "created" as const,
+        rawItemId: "raw_1",
+        observationId: "obs_1",
+        cardsCount: 0,
+        directMediaCount: 1,
+        cardMediaCount: 0,
+        deletedDirectMediaCount: 0,
+        deletedCardMediaCount: 0,
+      };
+    });
+
+    const result = await runCuriousCoderIngestion(createSampleInput(items), {
+      ...mocks,
+      ingestNormalizedAd: mockIngest,
+    });
+
+    expect(result.status).toBe("PARTIAL");
+    expect(result.sourceItemsCount).toBe(2);
+    expect(result.succeededItemsCount).toBe(1);
+    expect(result.failedItemsCount).toBe(1);
+    expect(result.failures[0].stage).toBe("prepare_media");
+    expect(result.failures[0].sourceAdId).toBe("ad_no_media");
+    expect(result.createdAdsCount).toBe(1);
   });
 });

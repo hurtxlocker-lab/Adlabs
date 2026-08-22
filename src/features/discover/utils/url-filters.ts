@@ -231,6 +231,7 @@ export function parseSortFromParams(
   if (!raw) return undefined;
 
   const VALID_SORTS: DiscoverySort[] = [
+    "EXPLORE",
     "RECENTLY_SEEN",
     "OLDEST_SEEN",
     "NEWEST_STARTED",
@@ -281,7 +282,7 @@ export function buildDiscoveryFilterParams(
   if (filter.shapeFamilies && filter.shapeFamilies.length > 0) {
     params.set(
       DISCOVERY_URL_PARAMS.shape,
-      [...new Set(filter.shapeFamilies.map((s) => s.toLowerCase()))].sort().join(","),
+      [...new Set(filter.shapeFamilies)].sort().join(","),
     );
   }
 
@@ -345,7 +346,7 @@ export function buildDiscoveryFilterParams(
     );
   }
 
-  if (sort && sort !== "RECENTLY_SEEN") {
+  if (sort && sort !== "EXPLORE" && sort !== "RECENTLY_SEEN") {
     params.set(DISCOVERY_URL_PARAMS.sort, sort);
   }
 

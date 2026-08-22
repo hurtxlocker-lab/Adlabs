@@ -147,11 +147,7 @@ export function PackedSlotCard({
                 className="w-full h-full max-w-full max-h-full object-contain object-center"
               />
             </div>
-          ) : (
-            <div className="w-full h-full min-h-32 flex items-center justify-center font-mono text-xs text-[#686e7b]">
-              Creative Media
-            </div>
-          )}
+          ) : null}
 
           {/* Date Watermark (Anchored to true Media Shell silhouette) */}
           {dateWatermark && (

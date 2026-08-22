@@ -56,6 +56,13 @@ describe("Database Integration: Step 4C1 - 4C4 Persistence Foundation", () => {
 
   afterAll(async () => {
     // Cleanup in strict reverse dependency order using explicit IDs only
+    // 00. ad_discovery_index
+    if (createdAdIds.length > 0) {
+      await db
+        .delete(schema.adDiscoveryIndex)
+        .where(inArray(schema.adDiscoveryIndex.adId, createdAdIds));
+    }
+
     // 0a. ad_transparency_observations
     if (createdObservationIds.length > 0) {
       await db

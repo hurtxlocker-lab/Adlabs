@@ -166,21 +166,17 @@ describe("MoreFiltersContent — facet-driven visibility", () => {
     onClearRange: noop,
   };
 
-  it("renders Creative group with CTA options when facet coverage exists", () => {
+  it("renders Creative group with CTA and Reuse options when facet coverage exists", () => {
     const html = renderToStaticMarkup(<MoreFiltersContent {...baseProps} />);
     expect(html).toContain("Creative");
     expect(html).toContain("SHOP_NOW");
     expect(html).toContain("LEARN_MORE");
+    expect(html).toContain("Exact creative reuse");
   });
 
-  it("renders Account group with Brand, Page category, IG followers", () => {
+  it("renders Account group with IG followers", () => {
     const html = renderToStaticMarkup(<MoreFiltersContent {...baseProps} />);
     expect(html).toContain("Account");
-    // Brand is a MultiSelector: its option list renders only when open, so
-    // assert the labelled control is present, not the closed list content.
-    expect(html).toContain(">Brand</label>");
-    expect(html).toContain("Page category");
-    expect(html).toContain("Apparel &amp; clothing");
     expect(html).toContain("IG followers");
   });
 
@@ -193,7 +189,7 @@ describe("MoreFiltersContent — facet-driven visibility", () => {
   it("renders Evidence group with UK evidence (secondary)", () => {
     const html = renderToStaticMarkup(<MoreFiltersContent {...baseProps} />);
     expect(html).toContain("Evidence");
-    expect(html).toContain("UK evidence");
+    expect(html).toContain("UK transparency");
   });
 
   it("never surfaces BR while zero evidence exists", () => {
@@ -266,7 +262,7 @@ describe("deriveActiveTokens", () => {
     expect(labels).toContain("EU evidence");
     expect(labels).toContain("EU reach 10K–50K");
     expect(labels).toContain("Shop now");
-    expect(labels).toContain("Apparel & clothing");
+    expect(labels).toContain("Category: Apparel & clothing");
     expect(labels).toContain("Spain");
     expect(labels).toContain("United Kingdom");
     expect(tokens.length).toBe(11);
@@ -302,7 +298,7 @@ describe("deriveActiveTokens", () => {
     ctaToken2?.onRemove();
     expect(toggledCalls).toContainEqual(["ctaTypes", "LEARN_MORE"]);
 
-    const pcToken = tokens.find((t) => t.label === "Apparel & clothing");
+    const pcToken = tokens.find((t) => t.label === "Category: Apparel & clothing");
     expect(pcToken).toBeDefined();
     pcToken?.onRemove();
     expect(toggledCalls).toContainEqual(["pageCategories", "Apparel & clothing"]);

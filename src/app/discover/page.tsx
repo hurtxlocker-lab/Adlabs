@@ -3,9 +3,11 @@ import Link from "next/link";
 import { getAdLibraryItemsByIds } from "@/features/ad-library";
 import { Header } from "@/components/navigation/header";
 import { FilterPanel } from "@/features/discover/components/filter-panel";
-import { PackedField } from "@/features/discover/components/packed-field/packed-field";
+import { CanonicalGallery } from "@/features/discover/components/gallery/canonical-gallery";
+import { LoadMoreButton } from "@/features/discover/components/gallery/load-more-button";
+import type { DiscoveryGalleryFacts } from "@/features/discover/queries/gallery-facts";
 import {
-  queryDiscoveryAds,
+  queryDiscoveryCreatives,
   queryDiscoveryFacets,
 } from "@/discovery/filters";
 import {
@@ -14,22 +16,14 @@ import {
 } from "@/features/discover/utils/url-filters";
 
 /**
- * Discover page — evidence-driven ad discovery.
+ * Discover page — evidence-driven canonical exact creative discovery gallery.
  *
  * Data query flow:
  *   URL searchParams
- *     ↓ parseDiscoveryFiltersFromParams()             — pure URL codec
- *     ↓ queryDiscoveryAds() + queryDiscoveryFacets()  — parallel (filter engine)
- *     ↓ getAdLibraryItemsByIds()                      — bulk hydration (4-5 SQL queries)
- *     ↓ PackedField                                   — rectilinear authored plate topology
- *
- * Logical DB query fanout on a default (no-filter) request:
- *   1  queryDiscoveryAds — 1 SQL query (filter + sort + limit)
- *   2  queryDiscoveryFacets — 12 parallel SQL queries (one per facet dimension)
- *   3  getAdLibraryItemsByIds — up to 5 SQL queries (ads, media, cards, card media,
- *      derivatives) — bounded bulk, never one query per ad
- *
- *   Total logical: ~18 SQL operations, all parallelized where possible.
+ *     ↓ parseDiscoveryFiltersFromParams()                — pure URL codec
+ *     ↓ queryDiscoveryCreatives() + queryDiscoveryFacets() — parallel grouped query
+ *     ↓ getAdLibraryItemsByIds(representativeAdIds)      — bulk hydration
+ *     ↓ CanonicalGallery                                 — dense creative gallery
  */
 
 export const dynamic = "force-dynamic";
@@ -43,21 +37,45 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
 
   // Parse URL → filter input (pure codec, no validation here)
   const filterInput = parseDiscoveryFiltersFromParams(resolvedParams);
-  const sort = parseSortFromParams(resolvedParams) ?? "RECENTLY_SEEN";
+  const sort = parseSortFromParams(resolvedParams) ?? "EXPLORE";
 
-  // Run discovery query + facets in parallel
+  // Parse pagination limit (default: 72 creative groups)
+  const rawLimit = resolvedParams.limit;
+  const currentLimit = Math.min(
+    Math.max(
+      parseInt(typeof rawLimit === "string" ? rawLimit : "72", 10) || 72,
+      1,
+    ),
+    500,
+  );
+
+  // Run discovery creative group query + facets in parallel
   const [result, facets] = await Promise.all([
-    queryDiscoveryAds({ filters: filterInput, sort, pageSize: 72 }),
+    queryDiscoveryCreatives({ filters: filterInput, sort, pageSize: currentLimit }),
     queryDiscoveryFacets({ filters: filterInput }),
   ]);
 
-  // Bulk hydrate ordered ad IDs — 4-5 bounded SQL queries, order preserved
-  const adIds = result.items.map((x) => x.adId);
-  const items = await getAdLibraryItemsByIds(adIds);
+  // Hydrate representative canonical ads for each group (order strictly preserved)
+  const representativeAdIds = result.items.map((x) => x.representativeAdId);
+  const items = await getAdLibraryItemsByIds(representativeAdIds);
+
+  // Map projection facts directly from creative groups (zero extra SQL round-trip)
+  const galleryFacts = new Map<string, DiscoveryGalleryFacts>();
+  for (const group of result.items) {
+    galleryFacts.set(group.representativeAdId, {
+      adId: group.representativeAdId,
+      videoDurationMs: group.videoDurationMs,
+      exactCreativeReuseCount: group.exactReuseCount,
+      hasEuTransparencyEvidence: group.hasEuTransparencyEvidence,
+      latestEuTotalReach: group.latestEuTotalReach,
+      hasUkTransparencyEvidence: group.hasUkTransparencyEvidence,
+      latestUkTotalReach: group.latestUkTotalReach,
+    });
+  }
 
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
-      <Header corpusCount={items.length} />
+      <Header corpusCount={result.totalCreativesCount} />
 
       <main className="flex-1 adlabs-canvas py-8 sm:py-12 pb-32 sm:pb-20 flex flex-col gap-8 lg:gap-10">
         {/* Page orientation */}
@@ -77,16 +95,30 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
               <div className="h-10 w-full bg-[#0c0e13] animate-pulse rounded-none" />
             }
           >
-            <FilterPanel facets={facets} totalCount={items.length} />
+            <FilterPanel
+              facets={facets}
+              totalCount={result.totalCreativesCount}
+              totalAdsCount={result.totalCanonicalAdsCount}
+            />
           </Suspense>
         </section>
 
-        {/* Creative field — Packed Field Topology */}
+        {/* Creative Gallery */}
         <section className="w-full">
           {items.length === 0 ? (
             <EmptyState />
           ) : (
-            <PackedField items={items} />
+            <>
+              <CanonicalGallery items={items} facts={galleryFacts} />
+              {result.hasMore && (
+                <LoadMoreButton
+                  currentLimit={currentLimit}
+                  increment={72}
+                  totalCreativesCount={result.totalCreativesCount}
+                  displayedCount={items.length}
+                />
+              )}
+            </>
           )}
         </section>
       </main>
@@ -107,7 +139,7 @@ function EmptyState() {
   return (
     <div className="w-full py-20 px-4 text-center border border-[#161820] bg-[#090b10] flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-[#f3f4f6] font-medium font-sans">
-        No ads match this evidence set.
+        No creatives match this evidence set.
       </p>
       <p className="text-xs text-[#686e7b] font-sans">
         Try adjusting your filters to expand the result set.

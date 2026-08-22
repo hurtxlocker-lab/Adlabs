@@ -173,4 +173,29 @@ describe("ingestNormalizedAd (Unit)", () => {
     // Confirms outcome is returned cleanly without triggering finishIngestionRun
     expect(result.adOutcome).toBe("updated");
   });
+
+  it("5. throws MissingRepresentativeMediaError when 0 media assets are prepared (rejects canonical promotion)", async () => {
+    const emptyPrepared: PreparedAdMedia = {
+      directMedia: [],
+      cardMedia: [
+        {
+          cardPosition: 0,
+          media: [],
+        },
+      ],
+    };
+
+    const mockPrepare = vi.fn(async () => emptyPrepared);
+    const mockPersist = vi.fn();
+
+    await expect(
+      ingestNormalizedAd(sampleInput, {
+        prepareAdMedia: mockPrepare,
+        persistPreparedObservedAd: mockPersist,
+      }),
+    ).rejects.toThrow("Cannot promote ad \"unit_ad_1\": no valid media assets could be extracted or prepared.");
+
+    // DB canonical persistence must NEVER be called
+    expect(mockPersist).not.toHaveBeenCalled();
+  });
 });

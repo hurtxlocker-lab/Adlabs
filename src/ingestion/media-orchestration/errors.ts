@@ -50,3 +50,16 @@ export class AdNotFoundError extends Error {
     this.adId = adId;
   }
 }
+
+export class MissingRepresentativeMediaError extends Error {
+  readonly sourceAdId: string;
+
+  constructor(sourceAdId: string, message?: string) {
+    super(
+      message ??
+        `Cannot promote ad "${sourceAdId}": no valid representative media could be prepared or established.`,
+    );
+    this.name = "MissingRepresentativeMediaError";
+    this.sourceAdId = sourceAdId;
+  }
+}

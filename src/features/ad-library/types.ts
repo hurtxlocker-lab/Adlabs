@@ -42,6 +42,63 @@ export interface AdLibraryCreativeVariation {
   media: AdLibraryMediaItem[];
 }
 
+export interface SiblingDeploymentFact {
+  id: string;
+  sourceAdId: string;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  hasEuEvidence: boolean;
+  hasUkEvidence: boolean;
+}
+
+export interface AdInspectDossierFacts {
+  startDate: Date | null;
+  runningDays: number | null;
+  exactCreativeReuseCount: number | null;
+
+  // Account
+  pageCategory: string | null;
+  instagramUsername: string | null;
+  instagramFollowers: bigint | null;
+  instagramVerified: boolean | null;
+  facebookLikes: bigint | null;
+  facebookVerified: boolean | null;
+  aboutText: string | null;
+
+  // Regional Transparency (EU)
+  hasEuTransparencyEvidence: boolean;
+  latestEuTotalReach: bigint | null;
+  latestEuTransparencyObservedAt: Date | null;
+  latestEuTargetAgeMin: number | null;
+  latestEuTargetAgeMax: number | null;
+  latestEuTargetGender: string | null;
+  euReachedCountries?: string[];
+  euTargetCountries?: string[];
+
+  // Regional Transparency (UK)
+  hasUkTransparencyEvidence: boolean;
+  latestUkTotalReach: bigint | null;
+  latestUkTransparencyObservedAt: Date | null;
+  latestUkTargetAgeMin: number | null;
+  latestUkTargetAgeMax: number | null;
+  latestUkTargetGender: string | null;
+  ukReachedCountries?: string[];
+  ukTargetCountries?: string[];
+
+  // Geography
+  targetCountries: string[];
+  reachedCountries: string[];
+
+  // Public Media Specs
+  videoDurationMs: number | null;
+  aspectRatio: number | null;
+  width: number | null;
+  height: number | null;
+
+  // Sibling deployments (same brand_id + representative_media_sha256)
+  siblingDeployments: SiblingDeploymentFact[];
+}
+
 export interface AdLibraryItem {
   id: string;
   source: string;
@@ -70,6 +127,7 @@ export interface AdLibraryItem {
    * @deprecated Use variations for UI presentation or sourceCards for provenance
    */
   cards: AdLibraryCardItem[];
+  dossier?: AdInspectDossierFacts;
 }
 
 export interface AdLibraryQueryParams {

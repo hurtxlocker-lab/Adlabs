@@ -2,8 +2,10 @@ import type { CreativeShapeFamily } from "@/features/discover/utils/creative-sha
 
 /**
  * Supported stable sort options for AdLabs Discovery.
+ * "EXPLORE" is the default brand-diverse discovery mode.
  */
 export type DiscoverySort =
+  | "EXPLORE"
   | "RECENTLY_SEEN"
   | "OLDEST_SEEN"
   | "NEWEST_STARTED"
@@ -102,26 +104,25 @@ export interface DiscoveryFilterInput {
   brReachMin?: number | bigint;
   brReachMax?: number | bigint;
 
-  // Countries
+  // Target Geography
   targetCountries?: string[];
   reachedCountries?: string[];
 
-  // Age (Requested interval for overlap match)
+  // Target Demographics
   euTargetAgeMin?: number;
   euTargetAgeMax?: number;
   ukTargetAgeMin?: number;
   ukTargetAgeMax?: number;
   brTargetAgeMin?: number;
   brTargetAgeMax?: number;
-
-  // Gender
   euTargetGenders?: string[];
   ukTargetGenders?: string[];
   brTargetGenders?: string[];
 }
 
 /**
- * Normalized, strictly typed filter state ready for SQL compilation.
+ * Fully normalized, canonical filter input.
+ * Arrays are sorted and deduplicated; strings are trimmed; dates are Date objects.
  */
 export interface NormalizedDiscoveryFilters {
   // Identity
@@ -173,26 +174,24 @@ export interface NormalizedDiscoveryFilters {
   brReachMin?: bigint;
   brReachMax?: bigint;
 
-  // Countries (Deduped, uppercase 2-letter codes, sorted)
+  // Target Geography
   targetCountries?: string[];
   reachedCountries?: string[];
 
-  // Age (0..120 bounds)
+  // Target Demographics
   euTargetAgeMin?: number;
   euTargetAgeMax?: number;
   ukTargetAgeMin?: number;
   ukTargetAgeMax?: number;
   brTargetAgeMin?: number;
   brTargetAgeMax?: number;
-
-  // Gender
   euTargetGenders?: string[];
   ukTargetGenders?: string[];
   brTargetGenders?: string[];
 }
 
 /**
- * Options for querying ads from ad_discovery_index.
+ * Options for querying canonical ad discovery items.
  */
 export interface QueryDiscoveryAdsOptions {
   filters?: DiscoveryFilterInput | NormalizedDiscoveryFilters;
@@ -204,7 +203,7 @@ export interface QueryDiscoveryAdsOptions {
 }
 
 /**
- * Result shape returned by the discovery query engine.
+ * Result shape returned by the canonical ad discovery query engine.
  */
 export interface QueryDiscoveryAdsResult {
   items: Array<{
@@ -212,6 +211,55 @@ export interface QueryDiscoveryAdsResult {
   }>;
   nextCursor: string | null;
   total?: number;
+}
+
+/**
+ * Exact Creative Group result item for Discover gallery.
+ * Defined by unique (brandId, representativeMediaSha256).
+ */
+export interface DiscoveryCreativeGroupItem {
+  groupKey: string;
+  brandId: string;
+  brandName: string;
+  brandSlug: string;
+  representativeAdId: string;
+  representativeMediaSha256: string | null;
+  representativeMediaType: "VIDEO" | "IMAGE" | null;
+  representativeShapeFamily: string | null;
+  representativeAspectRatio: number | null;
+  videoDurationMs: number | null;
+  exactReuseCount: number;
+  siblingAdIds: string[];
+  hasEuTransparencyEvidence: boolean;
+  latestEuTotalReach: bigint | null;
+  hasUkTransparencyEvidence: boolean;
+  latestUkTotalReach: bigint | null;
+  latestInstagramFollowers: bigint | null;
+  maxLastSeenAt: Date;
+  minStartDate: Date | null;
+}
+
+/**
+ * Options for querying grouped exact creative items.
+ */
+export interface QueryDiscoveryCreativesOptions {
+  filters?: DiscoveryFilterInput | NormalizedDiscoveryFilters;
+  sort?: DiscoverySort;
+  pageSize?: number;
+  offset?: number;
+  now?: Date;
+}
+
+/**
+ * Result shape returned by the creative group discovery query engine.
+ */
+export interface QueryDiscoveryCreativesResult {
+  items: DiscoveryCreativeGroupItem[];
+  totalCreativesCount: number;
+  totalCanonicalAdsCount: number;
+  pageSize: number;
+  offset: number;
+  hasMore: boolean;
 }
 
 /**

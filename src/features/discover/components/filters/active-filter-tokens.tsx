@@ -3,9 +3,7 @@
 /**
  * ActiveFilterTokens — compact removable tokens for the active filter state.
  *
- * Only ACTIVE selections render as tokens; inactive options are never
- * permanently shown as chips. Individual removal mutates the URL; Clear all
- * resets filter params while preserving unrelated route state.
+ * Displays primary filtered creative group count and active filter tokens.
  */
 
 export interface ActiveFilterToken {
@@ -16,12 +14,14 @@ export interface ActiveFilterToken {
 export interface ActiveFilterTokensProps {
   tokens: ActiveFilterToken[];
   totalCount: number;
+  totalAdsCount?: number;
   onClearAll: () => void;
 }
 
 export function ActiveFilterTokens({
   tokens,
   totalCount,
+  totalAdsCount,
   onClearAll,
 }: ActiveFilterTokensProps) {
   const hasActiveFilters = tokens.length > 0;
@@ -32,7 +32,10 @@ export function ActiveFilterTokens({
         className="text-[11px] font-mono text-[#686e7b] mr-1"
         aria-live="polite"
       >
-        Showing {totalCount.toLocaleString()} {totalCount === 1 ? "ad" : "ads"}
+        Showing {totalCount.toLocaleString()} {totalCount === 1 ? "creative" : "creatives"}
+        {totalAdsCount && totalAdsCount > totalCount ? (
+          <span className="text-[#525866] ml-1">({totalAdsCount.toLocaleString()} ads)</span>
+        ) : null}
       </span>
 
       {tokens.map((token, i) => (

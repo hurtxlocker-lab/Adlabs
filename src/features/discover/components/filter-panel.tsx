@@ -4,21 +4,7 @@
  * FilterPanel — Evidence-driven discovery filter controls.
  *
  * Visual tone: editorial index / archive instrument / cultural catalogue.
- * Not an analytics dashboard. Controls reflect evidence density from facets.
- *
- * Architecture (unchanged):
- * - This component is purely presentational. All filter logic lives in
- *   src/discovery/filters/. This component reads facets, renders controls,
- *   and updates the URL via useRouter.
- * - No SQL, no facet calculations, no client-side corpus queries.
- * - URL remains the source of truth; back/forward reproduces exact state.
- *
- * Interaction primitives:
- * - Multi-select (rail): native checkbox groups (role="group" + aria-labelledby)
- * - Single-select bands: Astryx Selector
- * - Booleans: Astryx Switch
- * - More Filters: Astryx Popover (focus trap, Escape/outside dismiss, restore)
- * - All Astryx imports live behind @/components/ui/astryx
+ * Controls reflect evidence density from facets.
  */
 
 import { useCallback, useTransition } from "react";
@@ -44,9 +30,10 @@ import { SortControl } from "./filters/sort-control";
 export interface FilterPanelProps {
   facets: DiscoveryFacetsResult;
   totalCount: number;
+  totalAdsCount?: number;
 }
 
-export function FilterPanel({ facets, totalCount }: FilterPanelProps) {
+export function FilterPanel({ facets, totalCount, totalAdsCount }: FilterPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -54,7 +41,7 @@ export function FilterPanel({ facets, totalCount }: FilterPanelProps) {
 
   // Parse current filter state from URL (source of truth)
   const currentFilter = parseDiscoveryFiltersFromParams(searchParams);
-  const currentSort = parseSortFromParams(searchParams) ?? "RECENTLY_SEEN";
+  const currentSort = parseSortFromParams(searchParams) ?? "EXPLORE";
 
   // ---------------------------------------------------------------------------
   // URL mutation helpers
@@ -178,6 +165,14 @@ export function FilterPanel({ facets, totalCount }: FilterPanelProps) {
     onClearRange: clearRange,
   };
 
+  const moreActiveCount =
+    (currentFilter.ctaTypes?.length ?? 0) +
+    (currentFilter.publisherPlatforms?.length ?? 0) +
+    (currentFilter.targetCountries?.length ?? 0) +
+    (currentFilter.exactCreativeReuseMin !== undefined ? 1 : 0) +
+    (currentFilter.instagramFollowersMin !== undefined ? 1 : 0) +
+    (currentFilter.hasUkTransparencyEvidence === true ? 1 : 0);
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -200,7 +195,7 @@ export function FilterPanel({ facets, totalCount }: FilterPanelProps) {
               <MoreFiltersPopover
                 {...moreFiltersContentProps}
                 triggerLabel="More filters"
-                badgeCount={tokens.length}
+                badgeCount={moreActiveCount}
               />
             }
           />
@@ -225,6 +220,7 @@ export function FilterPanel({ facets, totalCount }: FilterPanelProps) {
         <ActiveFilterTokens
           tokens={tokens}
           totalCount={totalCount}
+          totalAdsCount={totalAdsCount}
           onClearAll={clearAll}
         />
       </AstryxScope>

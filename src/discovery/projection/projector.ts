@@ -523,7 +523,9 @@ export async function rebuildDiscoveryIndex(
     .select({ id: ads.id })
     .from(ads);
 
-  if (options.adId) {
+  if (options.adIds && options.adIds.length > 0) {
+    query.where(inArray(ads.id, options.adIds));
+  } else if (options.adId) {
     query.where(eq(ads.id, options.adId));
   }
 
@@ -532,11 +534,9 @@ export async function rebuildDiscoveryIndex(
 
   for (let i = 0; i < allAdRows.length; i += chunkSize) {
     const chunk = allAdRows.slice(i, i + chunkSize);
-    await Promise.all(
-      chunk.map(async (row) => {
-        await projectAd(row.id, dbClient);
-      }),
-    );
+    for (const row of chunk) {
+      await projectAd(row.id, dbClient);
+    }
     totalProjected += chunk.length;
   }
 

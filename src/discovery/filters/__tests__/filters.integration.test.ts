@@ -68,35 +68,57 @@ describe("Discovery Filter Engine — Integration Tests", { timeout: 15000 }, ()
         .where(inArray(schema.adObservations.adId, createdAdIds));
     }
 
-    // 3. raw_ingestion_items
+    // 3. ad_media, card_media, ad_cards (must precede ads deletion)
+    if (createdAdIds.length > 0) {
+      await db
+        .delete(schema.adMedia)
+        .where(inArray(schema.adMedia.adId, createdAdIds));
+
+      const cardRows = await db
+        .select({ id: schema.adCards.id })
+        .from(schema.adCards)
+        .where(inArray(schema.adCards.adId, createdAdIds));
+      const cardIds = cardRows.map((c) => c.id);
+
+      if (cardIds.length > 0) {
+        await db
+          .delete(schema.cardMedia)
+          .where(inArray(schema.cardMedia.adCardId, cardIds));
+        await db
+          .delete(schema.adCards)
+          .where(inArray(schema.adCards.id, cardIds));
+      }
+    }
+
+    // 4. raw_ingestion_items
     if (createdRawItemIds.length > 0) {
       await db
         .delete(schema.rawIngestionItems)
         .where(inArray(schema.rawIngestionItems.id, createdRawItemIds));
     }
 
-    // 4. ads
+    // 5. ads
     if (createdAdIds.length > 0) {
       await db
         .delete(schema.ads)
         .where(inArray(schema.ads.id, createdAdIds));
     }
 
-    // 5. ingestion_runs
+    // 6. ingestion_runs
     if (createdIngestionRunIds.length > 0) {
       await db
         .delete(schema.ingestionRuns)
         .where(inArray(schema.ingestionRuns.id, createdIngestionRunIds));
     }
 
-    // 6. source_accounts
+    // 7. source_accounts
     if (createdSourceAccountIds.length > 0) {
       await db
         .delete(schema.sourceAccounts)
         .where(inArray(schema.sourceAccounts.id, createdSourceAccountIds));
     }
 
-    // 7. brands
+    // 8. brands
     if (createdBrandIds.length > 0) {
       await db
         .delete(schema.brands)

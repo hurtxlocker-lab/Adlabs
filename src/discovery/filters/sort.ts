@@ -3,10 +3,56 @@ import { asc, desc, sql, type SQL } from "drizzle-orm";
 import type { DiscoverySort } from "./types";
 
 /**
- * Returns deterministic ORDER BY clauses for a given sort enum.
+ * Returns deterministic ORDER BY clauses for grouped exact creative queries.
+ * Every sort includes deterministic tie-breakers ending with representative_ad_id ASC.
+ */
+export function getDiscoveryGroupedSortClauses(
+  sort: DiscoverySort = "EXPLORE",
+): SQL<unknown>[] {
+  switch (sort) {
+    case "EXPLORE":
+      return [sql`brand_round ASC`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "RECENTLY_SEEN":
+      return [sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "OLDEST_SEEN":
+      return [sql`max_last_seen_at ASC`, sql`representative_ad_id ASC`];
+
+    case "NEWEST_STARTED":
+      return [sql`min_start_date DESC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "OLDEST_STARTED":
+      return [sql`min_start_date ASC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "EU_REACH_DESC":
+      return [sql`latest_eu_total_reach DESC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "EU_REACH_ASC":
+      return [sql`latest_eu_total_reach ASC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "INSTAGRAM_FOLLOWERS_DESC":
+      return [sql`latest_instagram_followers DESC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "INSTAGRAM_FOLLOWERS_ASC":
+      return [sql`latest_instagram_followers ASC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "CREATIVE_REUSE_DESC":
+      return [sql`exact_reuse_count DESC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    case "CREATIVE_REUSE_ASC":
+      return [sql`exact_reuse_count ASC NULLS LAST`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+
+    default:
+      return [sql`brand_round ASC`, sql`max_last_seen_at DESC`, sql`representative_ad_id ASC`];
+  }
+}
+
+/**
+ * Returns deterministic ORDER BY clauses for canonical ad-level queries.
  * Every sort includes deterministic tie-breakers ending with `ad_id ASC`.
  *
- * @param sort The sort option enum
+ * @param sort The sort option enum (default: RECENTLY_SEEN)
  * @param useColumnNamesOnly If true, uses unqualified column identifiers (for CTE projections)
  */
 export function getDiscoverySortClauses(
@@ -15,6 +61,7 @@ export function getDiscoverySortClauses(
 ): SQL<unknown>[] {
   if (useColumnNamesOnly) {
     switch (sort) {
+      case "EXPLORE":
       case "RECENTLY_SEEN":
         return [sql`last_seen_at DESC`, sql`ad_id ASC`];
 
@@ -52,6 +99,7 @@ export function getDiscoverySortClauses(
 
   // Standard table-qualified clauses for ad_discovery_index
   switch (sort) {
+    case "EXPLORE":
     case "RECENTLY_SEEN":
       return [desc(adDiscoveryIndex.lastSeenAt), asc(adDiscoveryIndex.adId)];
 

@@ -17,6 +17,7 @@ export interface ProjectedRepresentativeCreative {
 export interface RebuildDiscoveryIndexOptions {
   brandSlug?: string;
   adId?: string;
+  adIds?: string[];
   chunkSize?: number;
   destructiveTruncate?: boolean;
 }

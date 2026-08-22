@@ -3,8 +3,7 @@
 /**
  * SortControl — single-select sort backed by Astryx Selector.
  *
- * Keeps the existing user-facing sort options (a curated subset of the full
- * DiscoverySort enum) and the RECENTLY_SEEN default.
+ * Exposes EXPLORE as default brand-diverse exploration alongside strict analytical sorts.
  */
 
 import { Selector } from "@/components/ui/astryx";
@@ -12,6 +11,7 @@ import type { DiscoverySort } from "@/discovery/filters/types";
 import { FILTER_SECTION_LABEL_CLASS } from "./filter-section";
 
 const SORT_OPTIONS: { label: string; value: DiscoverySort }[] = [
+  { label: "Explore (Diverse)", value: "EXPLORE" },
   { label: "Recently seen", value: "RECENTLY_SEEN" },
   { label: "Newest started", value: "NEWEST_STARTED" },
   { label: "EU reach ↓", value: "EU_REACH_DESC" },
@@ -43,9 +43,9 @@ export function SortControl({ value, onChange, className }: SortControlProps) {
         size="sm"
         variant="input"
         options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        value={value}
+        value={value ?? "EXPLORE"}
         onChange={(v) => onChange(v as DiscoverySort)}
-        className="min-w-40"
+        className="min-w-44"
       />
     </div>
   );
