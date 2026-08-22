@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { getAdLibraryItems } from "@/features/ad-library";
 import { Header } from "@/components/navigation/header";
 import { PackedField } from "@/features/discover/components/packed-field/packed-field";
@@ -11,6 +12,12 @@ interface DiscoverLabPageProps {
 }
 
 export default async function DiscoverLabPage({ searchParams }: DiscoverLabPageProps) {
+  // Production guard: /discover-lab is a development-only experiment page.
+  // Returns 404 in any environment other than local development.
+  if (process.env.NODE_ENV !== "development") {
+    notFound();
+  }
+
   const resolvedParams = searchParams ? await searchParams : undefined;
   const seed = typeof resolvedParams?.seed === "string" ? resolvedParams.seed : undefined;
   const items = await getAdLibraryItems();
