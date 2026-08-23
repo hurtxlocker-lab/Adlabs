@@ -6,5 +6,7 @@ export * from "./engine/binaries";
 export * from "./engine/ffprobe";
 export * from "./engine/ffmpeg";
 export * from "./engine/hashing";
+export * from "./engine/sharp";
 export * from "./persistence/derivative-repository";
 export * from "./services/derivative-processor";
+export * from "./services/image-derivative-processor";

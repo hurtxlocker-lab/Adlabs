@@ -27,7 +27,13 @@ function getVariationMediaInfo(variation: AdLibraryCreativeVariation): {
     variation.media.find((m) => m.role !== "preview") ?? variation.media[0];
 
   const isVideo = Boolean(video);
-  const mediaUrl = preview?.mediaUrl ?? image?.mediaUrl ?? video?.mediaUrl ?? null;
+  const mediaUrl =
+    preview?.browseImageUrl ??
+    preview?.mediaUrl ??
+    image?.browseImageUrl ??
+    image?.mediaUrl ??
+    video?.mediaUrl ??
+    null;
 
   return {
     mediaUrl,

@@ -54,14 +54,14 @@ export function GalleryAdCard({ item, facts, clusterId }: GalleryAdCardProps) {
                 clusterId={clusterId ?? `gallery-${item.id}`}
                 originalVideoUrl={rep.video.mediaUrl}
                 previewLoopUrl={rep.video.previewLoopUrl}
-                posterUrl={rep.preview?.mediaUrl}
+                posterUrl={rep.preview?.browseImageUrl ?? rep.preview?.mediaUrl}
                 title={item.brand.name}
                 isLead={false}
               />
             ) : rep.displayMedia ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={rep.displayMedia.mediaUrl}
+                src={rep.displayMedia.browseImageUrl ?? rep.displayMedia.mediaUrl}
                 alt={item.brand.name}
                 loading="lazy"
                 className="w-full h-full object-cover object-center"

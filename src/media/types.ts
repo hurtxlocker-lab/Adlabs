@@ -42,6 +42,26 @@ export interface DisplayImageRecipeConfig {
   stripMetadata: boolean;
 }
 
+export interface ImageDerivativeRecipeConfig {
+  version: string;
+  maxLongEdge: number;
+  quality: number;
+  effort: number;
+  format: "webp";
+  fit: "inside";
+  withoutEnlargement: boolean;
+  autoRotate: boolean;
+}
+
+export interface OptimizedImageResult {
+  buffer: Buffer;
+  sha256: string;
+  byteSize: number;
+  width: number;
+  height: number;
+  format: "webp";
+}
+
 export interface BenchmarkOutputMetric {
   sourceMediaAssetId: string;
   sourceDimensions: string;

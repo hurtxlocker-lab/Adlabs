@@ -64,6 +64,61 @@ async function resolvePreviewLoopUrls(
   return previewMap;
 }
 
+interface ImageDerivativeUrls {
+  browseImageUrl?: string | null;
+  detailImageUrl?: string | null;
+}
+
+/**
+ * Resolves READY DISPLAY_IMAGE (browse-image-v1 & detail-image-v1) derivative URLs for a set of source media asset IDs.
+ */
+async function resolveImageDerivativeUrls(
+  sourceMediaAssetIds: string[],
+): Promise<Map<string, ImageDerivativeUrls>> {
+  if (sourceMediaAssetIds.length === 0) return new Map();
+
+  const derivativeRows = await db
+    .select({
+      sourceMediaAssetId: mediaDerivatives.sourceMediaAssetId,
+      recipeVersion: mediaDerivatives.recipeVersion,
+      storageKey: mediaAssets.storageKey,
+    })
+    .from(mediaDerivatives)
+    .innerJoin(
+      mediaAssets,
+      eq(mediaDerivatives.derivedMediaAssetId, mediaAssets.id),
+    )
+    .where(
+      and(
+        inArray(mediaDerivatives.sourceMediaAssetId, sourceMediaAssetIds),
+        eq(mediaDerivatives.derivativeKind, "DISPLAY_IMAGE"),
+        inArray(mediaDerivatives.recipeVersion, [
+          "browse-image-v1",
+          "detail-image-v1",
+        ]),
+        eq(mediaDerivatives.status, "READY"),
+      ),
+    );
+
+  const imageDerivativeMap = new Map<string, ImageDerivativeUrls>();
+  for (const row of derivativeRows) {
+    if (!row.storageKey) continue;
+    try {
+      const url = resolveMediaUrl(row.storageKey);
+      const existing = imageDerivativeMap.get(row.sourceMediaAssetId) ?? {};
+      if (row.recipeVersion === "browse-image-v1") {
+        existing.browseImageUrl = url;
+      } else if (row.recipeVersion === "detail-image-v1") {
+        existing.detailImageUrl = url;
+      }
+      imageDerivativeMap.set(row.sourceMediaAssetId, existing);
+    } catch {
+      // Ignore resolution failure on malformed key
+    }
+  }
+  return imageDerivativeMap;
+}
+
 /**
  * Retrieves factual ad library items for Discover surfaces.
  * Based on pure domain parameters (search, format, brand, active state).
@@ -213,7 +268,7 @@ export async function getAdLibraryItems(
       .orderBy(cardMedia.position);
   }
 
-  // Collect all unique video source media asset IDs to resolve derivatives
+  // Collect all unique video and image source media asset IDs to resolve derivatives
   const allVideoSourceAssetIds = Array.from(
     new Set(
       [...mediaRows, ...cardMediaRows]
@@ -221,8 +276,18 @@ export async function getAdLibraryItems(
         .map((m) => m.mediaAssetId),
     ),
   );
+  const allImageSourceAssetIds = Array.from(
+    new Set(
+      [...mediaRows, ...cardMediaRows]
+        .filter((m) => m.mediaType === "IMAGE")
+        .map((m) => m.mediaAssetId),
+    ),
+  );
 
-  const previewLoopMap = await resolvePreviewLoopUrls(allVideoSourceAssetIds);
+  const [previewLoopMap, imageDerivativeMap] = await Promise.all([
+    resolvePreviewLoopUrls(allVideoSourceAssetIds),
+    resolveImageDerivativeUrls(allImageSourceAssetIds),
+  ]);
 
   // Group direct media by adId
   const directMediaByAdId = new Map<string, AdLibraryMediaItem[]>();
@@ -238,6 +303,8 @@ export async function getAdLibraryItems(
 
     const previewLoopUrl =
       m.mediaType === "VIDEO" ? previewLoopMap.get(m.mediaAssetId) ?? null : null;
+    const imageDerivatives =
+      m.mediaType === "IMAGE" ? imageDerivativeMap.get(m.mediaAssetId) : undefined;
 
     const mediaItem: AdLibraryMediaItem = {
       id: m.mediaAssetId,
@@ -247,6 +314,8 @@ export async function getAdLibraryItems(
       mimeType: m.mimeType,
       mediaUrl,
       previewLoopUrl,
+      browseImageUrl: imageDerivatives?.browseImageUrl ?? null,
+      detailImageUrl: imageDerivatives?.detailImageUrl ?? null,
       width: m.width,
       height: m.height,
     };
@@ -269,6 +338,8 @@ export async function getAdLibraryItems(
 
     const previewLoopUrl =
       cm.mediaType === "VIDEO" ? previewLoopMap.get(cm.mediaAssetId) ?? null : null;
+    const imageDerivatives =
+      cm.mediaType === "IMAGE" ? imageDerivativeMap.get(cm.mediaAssetId) : undefined;
 
     const mediaItem: AdLibraryMediaItem = {
       id: cm.mediaAssetId,
@@ -278,6 +349,8 @@ export async function getAdLibraryItems(
       mimeType: cm.mimeType,
       mediaUrl,
       previewLoopUrl,
+      browseImageUrl: imageDerivatives?.browseImageUrl ?? null,
+      detailImageUrl: imageDerivatives?.detailImageUrl ?? null,
       width: cm.width,
       height: cm.height,
     };
@@ -478,7 +551,7 @@ export async function getAdLibraryItemsByIds(
       .orderBy(cardMedia.position);
   }
 
-  // 5. Resolve derivative preview-loop URLs for all video assets in one bulk query
+  // 5. Resolve derivative preview-loop and image derivative URLs in bulk queries
   const allVideoSourceAssetIds = Array.from(
     new Set(
       [...mediaRows, ...cardMediaRows]
@@ -486,7 +559,18 @@ export async function getAdLibraryItemsByIds(
         .map((m) => m.mediaAssetId),
     ),
   );
-  const previewLoopMap = await resolvePreviewLoopUrls(allVideoSourceAssetIds);
+  const allImageSourceAssetIds = Array.from(
+    new Set(
+      [...mediaRows, ...cardMediaRows]
+        .filter((m) => m.mediaType === "IMAGE")
+        .map((m) => m.mediaAssetId),
+    ),
+  );
+
+  const [previewLoopMap, imageDerivativeMap] = await Promise.all([
+    resolvePreviewLoopUrls(allVideoSourceAssetIds),
+    resolveImageDerivativeUrls(allImageSourceAssetIds),
+  ]);
 
   // Index direct media by adId
   const directMediaByAdId = new Map<string, AdLibraryMediaItem[]>();
@@ -500,6 +584,9 @@ export async function getAdLibraryItemsByIds(
     }
     const previewLoopUrl =
       m.mediaType === "VIDEO" ? previewLoopMap.get(m.mediaAssetId) ?? null : null;
+    const imageDerivatives =
+      m.mediaType === "IMAGE" ? imageDerivativeMap.get(m.mediaAssetId) : undefined;
+
     const mediaItem: AdLibraryMediaItem = {
       id: m.mediaAssetId,
       mediaType: (m.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
@@ -508,6 +595,8 @@ export async function getAdLibraryItemsByIds(
       mimeType: m.mimeType,
       mediaUrl,
       previewLoopUrl,
+      browseImageUrl: imageDerivatives?.browseImageUrl ?? null,
+      detailImageUrl: imageDerivatives?.detailImageUrl ?? null,
       width: m.width,
       height: m.height,
     };
@@ -528,6 +617,9 @@ export async function getAdLibraryItemsByIds(
     }
     const previewLoopUrl =
       cm.mediaType === "VIDEO" ? previewLoopMap.get(cm.mediaAssetId) ?? null : null;
+    const imageDerivatives =
+      cm.mediaType === "IMAGE" ? imageDerivativeMap.get(cm.mediaAssetId) : undefined;
+
     const mediaItem: AdLibraryMediaItem = {
       id: cm.mediaAssetId,
       mediaType: (cm.mediaType as "IMAGE" | "VIDEO" | "UNKNOWN") ?? "UNKNOWN",
@@ -536,6 +628,8 @@ export async function getAdLibraryItemsByIds(
       mimeType: cm.mimeType,
       mediaUrl,
       previewLoopUrl,
+      browseImageUrl: imageDerivatives?.browseImageUrl ?? null,
+      detailImageUrl: imageDerivatives?.detailImageUrl ?? null,
       width: cm.width,
       height: cm.height,
     };
@@ -794,7 +888,7 @@ export async function getAdLibraryItemById(
       .limit(10);
   }
 
-  // Collect video source IDs
+  // Collect video and image source IDs
   const allVideoSourceAssetIds = Array.from(
     new Set(
       [...mediaRows, ...cardMediaRows]
@@ -802,8 +896,18 @@ export async function getAdLibraryItemById(
         .map((m) => m.mediaAssetId),
     ),
   );
+  const allImageSourceAssetIds = Array.from(
+    new Set(
+      [...mediaRows, ...cardMediaRows]
+        .filter((m) => m.mediaType === "IMAGE")
+        .map((m) => m.mediaAssetId),
+    ),
+  );
 
-  const previewLoopMap = await resolvePreviewLoopUrls(allVideoSourceAssetIds);
+  const [previewLoopMap, imageDerivativeMap] = await Promise.all([
+    resolvePreviewLoopUrls(allVideoSourceAssetIds),
+    resolveImageDerivativeUrls(allImageSourceAssetIds),
+  ]);
 
   const directMedia: AdLibraryMediaItem[] = [];
   for (const m of mediaRows) {
@@ -812,6 +916,8 @@ export async function getAdLibraryItemById(
       const mediaUrl = resolveMediaUrl(m.storageKey);
       const previewLoopUrl =
         m.mediaType === "VIDEO" ? previewLoopMap.get(m.mediaAssetId) ?? null : null;
+      const imageDerivatives =
+        m.mediaType === "IMAGE" ? imageDerivativeMap.get(m.mediaAssetId) : undefined;
 
       directMedia.push({
         id: m.mediaAssetId,
@@ -821,6 +927,8 @@ export async function getAdLibraryItemById(
         mimeType: m.mimeType,
         mediaUrl,
         previewLoopUrl,
+        browseImageUrl: imageDerivatives?.browseImageUrl ?? null,
+        detailImageUrl: imageDerivatives?.detailImageUrl ?? null,
         width: m.width,
         height: m.height,
       });
@@ -836,6 +944,8 @@ export async function getAdLibraryItemById(
       const mediaUrl = resolveMediaUrl(cm.storageKey);
       const previewLoopUrl =
         cm.mediaType === "VIDEO" ? previewLoopMap.get(cm.mediaAssetId) ?? null : null;
+      const imageDerivatives =
+        cm.mediaType === "IMAGE" ? imageDerivativeMap.get(cm.mediaAssetId) : undefined;
 
       const mediaItem: AdLibraryMediaItem = {
         id: cm.mediaAssetId,
@@ -845,6 +955,8 @@ export async function getAdLibraryItemById(
         mimeType: cm.mimeType,
         mediaUrl,
         previewLoopUrl,
+        browseImageUrl: imageDerivatives?.browseImageUrl ?? null,
+        detailImageUrl: imageDerivatives?.detailImageUrl ?? null,
         width: cm.width,
         height: cm.height,
       };

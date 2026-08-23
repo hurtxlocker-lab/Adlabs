@@ -96,6 +96,56 @@ export const VIDEO_BENCHMARK_RECIPES: Record<string, VideoRecipeConfig> = {
 };
 
 /**
+ * Production Browse Image Derivative Recipe: browse-image-v1
+ *
+ * Parameters:
+ * - maxLongEdge = 768
+ * - quality = 76
+ * - effort = 5
+ * - format = webp
+ * - fit = inside
+ * - withoutEnlargement = true
+ * - autoRotate = true
+ * - preserveAspectRatio = true
+ * - colorSpace = sRGB
+ */
+export const BROWSE_IMAGE_V1 = {
+  version: "browse-image-v1",
+  maxLongEdge: 768,
+  quality: 76,
+  effort: 5,
+  format: "webp" as const,
+  fit: "inside" as const,
+  withoutEnlargement: true,
+  autoRotate: true,
+};
+
+/**
+ * Production Detail Image Derivative Recipe: detail-image-v1
+ *
+ * Parameters:
+ * - maxLongEdge = 1440
+ * - quality = 84
+ * - effort = 5
+ * - format = webp
+ * - fit = inside
+ * - withoutEnlargement = true
+ * - autoRotate = true
+ * - preserveAspectRatio = true
+ * - colorSpace = sRGB
+ */
+export const DETAIL_IMAGE_V1 = {
+  version: "detail-image-v1",
+  maxLongEdge: 1440,
+  quality: 84,
+  effort: 5,
+  format: "webp" as const,
+  fit: "inside" as const,
+  withoutEnlargement: true,
+  autoRotate: true,
+};
+
+/**
  * Benchmark Display Image Recipe Matrix (WebP, max 1080 long edge, sRGB)
  */
 export const IMAGE_BENCHMARK_RECIPES: Record<string, DisplayImageRecipeConfig> = {

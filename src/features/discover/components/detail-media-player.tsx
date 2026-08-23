@@ -38,7 +38,7 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
             {isPlaying ? (
               <video
                 src={currentVideo.mediaUrl}
-                poster={currentPreview?.mediaUrl}
+                poster={currentPreview?.detailImageUrl ?? currentPreview?.mediaUrl}
                 preload="none"
                 controls
                 autoPlay
@@ -50,7 +50,7 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
                 {currentPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={currentPreview.mediaUrl}
+                    src={currentPreview.detailImageUrl ?? currentPreview.mediaUrl}
                     alt={item.headline || item.brand.name}
                     className="dco-card-crossfade w-full h-full max-w-full max-h-full object-contain object-center"
                   />
@@ -84,7 +84,7 @@ export function DetailMediaPlayer({ item }: DetailMediaPlayerProps) {
           <div className="absolute inset-0 w-full h-full flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={currentDisplayMedia.mediaUrl}
+              src={currentDisplayMedia.detailImageUrl ?? currentDisplayMedia.mediaUrl}
               alt={item.headline || item.brand.name}
               className="dco-card-crossfade w-full h-full max-w-full max-h-full object-contain object-center"
             />

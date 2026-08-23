@@ -161,7 +161,7 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
                           {isVideo && variationPrimaryMedia ? (
                             <video
                               src={variationPrimaryMedia.mediaUrl}
-                              poster={variationPreview?.mediaUrl}
+                              poster={variationPreview?.detailImageUrl ?? variationPreview?.mediaUrl}
                               preload="none"
                               controls
                               playsInline
@@ -170,7 +170,7 @@ export default async function AdDetailPage({ params }: AdDetailPageProps) {
                           ) : variationPrimaryMedia ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={variationPrimaryMedia.mediaUrl}
+                              src={variationPrimaryMedia.detailImageUrl ?? variationPrimaryMedia.mediaUrl}
                               alt={variation.headline || `Variation ${idx + 1}`}
                               className="w-full h-full max-w-full max-h-full object-contain object-center"
                             />

@@ -143,7 +143,7 @@ export function CreativeCard({
                   clusterId={clusterId}
                   originalVideoUrl={currentVideo.mediaUrl}
                   previewLoopUrl={currentVideo.previewLoopUrl}
-                  posterUrl={currentPreview?.mediaUrl}
+                  posterUrl={currentPreview?.browseImageUrl ?? currentPreview?.mediaUrl}
                   title={item.brand.name}
                   isLead={isLead}
                 />
@@ -151,7 +151,7 @@ export function CreativeCard({
                 <div className="absolute inset-0 w-full h-full flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={currentDisplayMedia.mediaUrl}
+                    src={currentDisplayMedia.browseImageUrl ?? currentDisplayMedia.mediaUrl}
                     alt={item.brand.name}
                     loading="lazy"
                     className="dco-card-crossfade w-full h-full max-w-full max-h-full object-contain object-center"

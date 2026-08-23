@@ -13,6 +13,8 @@ export interface AdLibraryMediaItem {
   mimeType: string | null;
   mediaUrl: string;
   previewLoopUrl?: string | null;
+  browseImageUrl?: string | null;
+  detailImageUrl?: string | null;
   width?: number | null;
   height?: number | null;
 }
