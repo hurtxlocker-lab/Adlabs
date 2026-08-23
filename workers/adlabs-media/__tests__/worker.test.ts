@@ -139,7 +139,9 @@ describe("Cloudflare Media Worker Gateway (adlabs-media-dev)", () => {
     expect(response.headers.get("Content-Length")).toBe("1000");
     expect(response.headers.get("Accept-Ranges")).toBe("bytes");
     expect(response.headers.get("ETag")).toBe(`"${sampleSha}"`);
-    expect(response.headers.get("Cache-Control")).toBe("private, no-transform");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=31536000, s-maxage=31536000, immutable",
+    );
 
     const body = await response.arrayBuffer();
     expect(body.byteLength).toBe(1000);
@@ -159,7 +161,9 @@ describe("Cloudflare Media Worker Gateway (adlabs-media-dev)", () => {
     expect(response.headers.get("Content-Length")).toBe("1000");
     expect(response.headers.get("Accept-Ranges")).toBe("bytes");
     expect(response.headers.get("ETag")).toBe(`"${sampleSha}"`);
-    expect(response.headers.get("Cache-Control")).toBe("private, no-transform");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=31536000, s-maxage=31536000, immutable",
+    );
 
     const text = await response.text();
     expect(text).toBe("");

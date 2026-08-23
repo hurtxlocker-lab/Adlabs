@@ -146,6 +146,12 @@ export async function handleMediaRequest(
     });
   }
 
+  const cache =
+    typeof caches !== "undefined" && "default" in caches
+      ? (caches as unknown as { default: Cache }).default
+      : null;
+  const cacheKey = new Request(url.toString(), { method: "GET" });
+
   // 3. Handle HEAD Requests (Metadata only)
   if (method === "HEAD") {
     const object = await env.MEDIA_BUCKET.head(storageKey);
@@ -167,8 +173,10 @@ export async function handleMediaRequest(
     headers.set("Content-Length", object.size.toString());
     headers.set("Accept-Ranges", "bytes");
     headers.set("ETag", object.httpEtag);
-    // Security: private cache prevents unauthenticated caching on shared proxies during Access DEV
-    headers.set("Cache-Control", "private, no-transform");
+    headers.set(
+      "Cache-Control",
+      "public, max-age=31536000, s-maxage=31536000, immutable",
+    );
 
     return new Response(null, {
       status: 200,
@@ -235,7 +243,10 @@ export async function handleMediaRequest(
     );
     headers.set("Accept-Ranges", "bytes");
     headers.set("ETag", partialObject.httpEtag);
-    headers.set("Cache-Control", "private, no-transform");
+    headers.set(
+      "Cache-Control",
+      "public, max-age=31536000, s-maxage=31536000, immutable",
+    );
 
     return new Response(partialObject.body as ReadableStream, {
       status: 206,
@@ -243,7 +254,19 @@ export async function handleMediaRequest(
     });
   }
 
-  // 5. Full Object GET
+  // 5. Check Cache for Full 200 GET
+  if (cache) {
+    try {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    } catch {
+      // Cache lookup failed, continue to R2 fetch
+    }
+  }
+
+  // 6. Full Object GET from R2
   const object = await env.MEDIA_BUCKET.get(storageKey);
 
   if (!object || !("body" in object) || !object.body) {
@@ -264,12 +287,25 @@ export async function handleMediaRequest(
   headers.set("Content-Length", object.size.toString());
   headers.set("Accept-Ranges", "bytes");
   headers.set("ETag", object.httpEtag);
-  headers.set("Cache-Control", "private, no-transform");
+  headers.set(
+    "Cache-Control",
+    "public, max-age=31536000, s-maxage=31536000, immutable",
+  );
 
-  return new Response(object.body as ReadableStream, {
+  const response = new Response(object.body as ReadableStream, {
     status: 200,
     headers,
   });
+
+  if (cache) {
+    try {
+      await cache.put(cacheKey, response.clone());
+    } catch {
+      // Ignore cache put errors
+    }
+  }
+
+  return response;
 }
 
 const worker = {
