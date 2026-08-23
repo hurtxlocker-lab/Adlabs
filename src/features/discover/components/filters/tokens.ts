@@ -38,6 +38,7 @@ export function deriveActiveTokens(
   filter: DiscoveryFilterInput,
   facets: DiscoveryFacetsResult,
   handlers: TokenHandlers,
+  brandNameMap?: Record<string, string>,
 ): ActiveToken[] {
   const tokens: ActiveToken[] = [];
 
@@ -111,10 +112,11 @@ export function deriveActiveTokens(
   }
 
   (filter.brandIds ?? []).forEach((id) => {
-    const brand = facets.brands.find((b) => b.brandId === id);
-    if (brand) {
+    const brandName =
+      brandNameMap?.[id] ?? facets.brands.find((b) => b.brandId === id)?.brandName;
+    if (brandName) {
       tokens.push({
-        label: brand.brandName,
+        label: brandName,
         onRemove: () => handlers.toggleStringArray("brandIds", id),
       });
     }

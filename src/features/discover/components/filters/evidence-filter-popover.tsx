@@ -1,10 +1,5 @@
 "use client";
 
-import {
-  Popover,
-  Selector,
-  Switch,
-} from "@/components/ui/astryx";
 import type {
   DiscoveryFacetsResult,
   DiscoveryFilterInput,
@@ -14,6 +9,7 @@ import {
   euReachBandToFilterRange,
   type EuReachBandKey,
 } from "@/features/discover/utils/url-filters";
+import { NativePopover } from "./native-popover";
 
 export interface EvidenceFilterContentProps {
   facets: DiscoveryFacetsResult;
@@ -61,7 +57,7 @@ export function EvidenceFilterContent({
     .filter((b) => b.count > 0 || b.key === euReachKey)
     .map((b) => ({ key: b.key, label: b.label }));
 
-  const handleEuReachSelect = (key: string | null) => {
+  const handleEuReachSelect = (key: string) => {
     if (!key) {
       onClearRange("euReachMin", "euReachMax");
       return;
@@ -71,45 +67,56 @@ export function EvidenceFilterContent({
   };
 
   return (
-    <div className="flex flex-col gap-4 p-1 max-h-[70vh] overflow-y-auto font-sans">
+    <div className="flex flex-col gap-4 font-sans">
       {showEu && (
         <div className="flex flex-col gap-2.5">
           <SectionHeading>European Union (EU)</SectionHeading>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#9da2ad]">
-              EU transparency evidence ({euCount})
-            </span>
-            <Switch
-              label={`EU evidence (${euCount})`}
-              isLabelHidden
-              size="sm"
-              value={hasEuSelected}
-              onChange={(checked) =>
-                onSetBoolean("hasEuTransparencyEvidence", checked)
-              }
-            />
-          </div>
+          <label className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={hasEuSelected}
+                onChange={(e) =>
+                  onSetBoolean("hasEuTransparencyEvidence", e.target.checked)
+                }
+                className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+              />
+              <span className={hasEuSelected ? "text-[#f3f4f6] font-medium" : ""}>
+                EU transparency evidence
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-[#686e7b]">{euCount}</span>
+          </label>
 
           {showEuReach && euReachOptions.length > 0 && (
-            <div className="flex flex-col gap-1 mt-1">
-              <span className="text-[11px] text-[#686e7b]">
+            <div className="flex flex-col gap-1 mt-1 pl-1">
+              <label htmlFor="eu-reach-select" className="text-[11px] text-[#686e7b]">
                 EU reach band
-              </span>
-              <Selector
-                label="EU reach band"
-                isLabelHidden
-                size="sm"
-                variant="input"
-                hasClear
-                placeholder="Any reach"
-                options={euReachOptions.map((o) => ({
-                  value: o.key,
-                  label: o.label,
-                }))}
-                value={euReachKey}
-                onChange={(val) => handleEuReachSelect(val as string | null)}
-                className="w-full"
-              />
+              </label>
+              <div className="relative inline-block">
+                <select
+                  id="eu-reach-select"
+                  value={euReachKey ?? ""}
+                  onChange={(e) => handleEuReachSelect(e.target.value)}
+                  className="w-full appearance-none bg-[#0c0e14] border border-[#1e222d] hover:border-[#2a2f3d] focus:border-[#d46b38] focus:outline-none text-xs text-[#f3f4f6] rounded-[3px] px-2.5 py-1 pr-7 cursor-pointer transition-colors"
+                  aria-label="Filter by EU reach band"
+                >
+                  <option value="" className="bg-[#0c0e14] text-[#9da2ad]">
+                    Any reach
+                  </option>
+                  {euReachOptions.map((o) => (
+                    <option key={o.key} value={o.key} className="bg-[#0c0e14] text-[#f3f4f6]">
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#686e7b]"
+                  aria-hidden="true"
+                >
+                  ▾
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -118,20 +125,22 @@ export function EvidenceFilterContent({
       {showUk && (
         <div className="flex flex-col gap-2">
           <SectionHeading>United Kingdom (UK)</SectionHeading>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#9da2ad]">
-              UK transparency evidence ({ukCount})
-            </span>
-            <Switch
-              label={`UK evidence (${ukCount})`}
-              isLabelHidden
-              size="sm"
-              value={hasUkSelected}
-              onChange={(checked) =>
-                onSetBoolean("hasUkTransparencyEvidence", checked)
-              }
-            />
-          </div>
+          <label className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={hasUkSelected}
+                onChange={(e) =>
+                  onSetBoolean("hasUkTransparencyEvidence", e.target.checked)
+                }
+                className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+              />
+              <span className={hasUkSelected ? "text-[#f3f4f6] font-medium" : ""}>
+                UK transparency evidence
+              </span>
+            </div>
+            <span className="font-mono text-[10px] text-[#686e7b]">{ukCount}</span>
+          </label>
         </div>
       )}
     </div>
@@ -174,12 +183,29 @@ export function EvidenceFilterPopover({
   }
 
   return (
-    <Popover
-      label="Evidence"
-      placement="below"
-      alignment="start"
+    <NativePopover
       width={300}
-      content={
+      trigger={({ isOpen, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
+            activeCount > 0
+              ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
+              : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
+          }`}
+          aria-label={`Filter by Evidence (${activeCount} active)`}
+        >
+          <span>{triggerLabel}</span>
+          <span className="text-[10px] text-[#686e7b]" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+      )}
+    >
+      {() => (
         <EvidenceFilterContent
           facets={facets}
           filter={filter}
@@ -187,20 +213,7 @@ export function EvidenceFilterPopover({
           onSetRange={onSetRange}
           onClearRange={onClearRange}
         />
-      }
-    >
-      <button
-        type="button"
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
-          activeCount > 0
-            ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
-            : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
-        }`}
-        aria-label={`Filter by Evidence (${activeCount} active)`}
-      >
-        <span>{triggerLabel}</span>
-        <span className="text-[10px] text-[#686e7b]" aria-hidden="true">▾</span>
-      </button>
-    </Popover>
+      )}
+    </NativePopover>
   );
 }

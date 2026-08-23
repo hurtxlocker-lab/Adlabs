@@ -1,19 +1,11 @@
 "use client";
 
 /**
- * BandSelectFilter — single-select band control backed by Astryx Selector.
+ * BandSelectFilter — single-select band control backed by native HTML select.
  *
- * Used for Running time, Creative reuse, EU reach (contextual), and sort-like
- * single-choice band dimensions. The visible section label is rendered by the
- * caller via FilterSection; the Selector's own label stays accessible
- * (isLabelHidden) and names the control for assistive technology.
- *
- * Astryx provides the combobox/listbox interaction, keyboard navigation,
- * focus management, and Escape/outside-click dismissal. All visuals come from
- * AdLabs tokens/className via the .adlabs-astryx scope.
+ * Used for Running time, Creative reuse, EU reach, and single-choice band dimensions.
  */
 
-import { Selector } from "@/components/ui/astryx";
 import { FILTER_SECTION_LABEL_CLASS } from "./filter-section";
 
 export interface BandSelectOption {
@@ -40,24 +32,46 @@ export function BandSelectFilter({
   disabled,
   onSelect,
 }: BandSelectFilterProps) {
+  const isSelected = selectedKey !== null && selectedKey !== "";
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={id} className={FILTER_SECTION_LABEL_CLASS}>
+      <label htmlFor={id} className={FILTER_SECTION_LABEL_CLASS}>
         {label}
-      </span>
-      <Selector
-        label={label}
-        isLabelHidden
-        size="sm"
-        variant="input"
-        hasClear
-        placeholder={placeholder}
-        isDisabled={disabled}
-        options={options.map((o) => ({ value: o.key, label: o.label }))}
-        value={selectedKey}
-        onChange={(value) => onSelect(value as string | null)}
-        className="min-w-32"
-      />
+      </label>
+      <div className="relative inline-block">
+        <select
+          id={id}
+          value={selectedKey ?? ""}
+          disabled={disabled}
+          onChange={(e) => onSelect(e.target.value ? e.target.value : null)}
+          className={`appearance-none bg-[#090b10] border rounded-[3px] px-2.5 py-1 pr-7 text-xs font-sans cursor-pointer transition-colors focus:outline-none focus:border-[#d46b38] ${
+            isSelected
+              ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
+              : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4]"
+          }`}
+          aria-label={`Filter by ${label}`}
+        >
+          <option value="" className="bg-[#090b10] text-[#9da2ad]">
+            {placeholder}
+          </option>
+          {options.map((opt) => (
+            <option
+              key={opt.key}
+              value={opt.key}
+              className="bg-[#090b10] text-[#f3f4f6]"
+            >
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <span
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#686e7b]"
+          aria-hidden="true"
+        >
+          ▾
+        </span>
+      </div>
     </div>
   );
 }

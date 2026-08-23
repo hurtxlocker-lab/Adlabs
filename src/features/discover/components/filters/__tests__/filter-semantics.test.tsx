@@ -14,7 +14,7 @@ import { detectRunningBandKey, detectReuseBandKey } from "../bands";
 // Mock facet data (matches current DEV-corpus evidence shape)
 // ---------------------------------------------------------------------------
 
-const mockFacets: DiscoveryFacetsResult = {
+export const mockFacets: DiscoveryFacetsResult = {
   mediaTypes: [
     { value: "VIDEO", count: 40 },
     { value: "IMAGE", count: 31 },
@@ -146,9 +146,9 @@ describe("TransparencyFilter — boolean semantics", () => {
       />,
     );
     expect(html).toContain("EU reach");
-    // The band list renders only when the Selector opens; assert the labelled
-    // combobox control is present for the contextual dimension.
-    expect(html).toContain('role="combobox"');
+    // Assert the native select control is present for the contextual dimension.
+    expect(html).toContain('id="eu-reach"');
+    expect(html).toContain("<select");
   });
 });
 

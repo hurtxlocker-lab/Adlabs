@@ -8,10 +8,10 @@ export interface AmbientCandidate {
   isLead: boolean;
   domOrder: number;
   isVisible: boolean;
+  intersectionRatio?: number;
 }
 
 export interface AmbientEligibilityOptions {
-  isTouch?: boolean;
   isReducedMotion?: boolean;
   isDco?: boolean;
   isMultiVariation?: boolean;
@@ -24,7 +24,6 @@ export interface AmbientEligibilityOptions {
 export function shouldEnableAmbientPreview(
   options: AmbientEligibilityOptions,
 ): boolean {
-  if (options.isTouch === true) return false;
   if (options.isReducedMotion === true) return false;
   if (options.isDco === true) return false;
   if (options.isMultiVariation === true) return false;
@@ -47,8 +46,9 @@ export function isTimeInPreviewWindow(
  *
  * Priority order:
  *  1. Currently focused/hovered candidate (isFocused === true)
- *  2. Visible lead-role candidate (isLead === true)
- *  3. Visible supporting candidates in deterministic DOM order
+ *  2. Highest intersection ratio (most meaningfully visible in viewport)
+ *  3. Visible lead-role candidate (isLead === true)
+ *  4. Visible supporting candidates in deterministic DOM order
  */
 export function selectActiveAmbientPreviews(
   candidates: AmbientCandidate[],
@@ -57,15 +57,22 @@ export function selectActiveAmbientPreviews(
   const visible = candidates.filter((c) => c.isVisible);
 
   const sorted = [...visible].sort((a, b) => {
-    // 1. Focused item gets top priority
+    // 1. Focused item gets top priority (desktop hover / focus)
     if (a.isFocused && !b.isFocused) return -1;
     if (!a.isFocused && b.isFocused) return 1;
 
-    // 2. Lead role gets secondary priority
+    // 2. Meaningful difference in intersection ratio
+    const aRatio = a.intersectionRatio ?? 0;
+    const bRatio = b.intersectionRatio ?? 0;
+    if (Math.abs(aRatio - bRatio) > 0.05) {
+      return bRatio - aRatio;
+    }
+
+    // 3. Lead role gets next priority
     if (a.isLead && !b.isLead) return -1;
     if (!a.isLead && b.isLead) return 1;
 
-    // 3. Deterministic DOM order
+    // 4. Deterministic DOM order
     return a.domOrder - b.domOrder;
   });
 

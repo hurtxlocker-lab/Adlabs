@@ -24,13 +24,10 @@ describe("Ambient Video Preview Coordinator", () => {
   });
 
   it("determines ambient preview eligibility according to product policy", () => {
-    // Normal desktop single video is eligible
+    // Normal desktop/mobile single video is eligible
     expect(shouldEnableAmbientPreview({})).toBe(true);
 
-    // Mobile / touch is excluded
-    expect(shouldEnableAmbientPreview({ isTouch: true })).toBe(false);
-
-    // Reduced motion preference is excluded
+    // Reduced motion preference is excluded (hard no-autoplay signal)
     expect(shouldEnableAmbientPreview({ isReducedMotion: true })).toBe(false);
 
     // Multi-variation / Psyence items are excluded

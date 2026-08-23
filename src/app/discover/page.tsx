@@ -73,6 +73,18 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     });
   }
 
+  // Collect brand names for token and UI display (guarantees human name display even outside top facets)
+  const brandNameMap: Record<string, string> = {};
+  for (const b of facets.brands) {
+    brandNameMap[b.brandId] = b.brandName;
+  }
+  for (const group of result.items) {
+    brandNameMap[group.brandId] = group.brandName;
+  }
+  for (const item of items) {
+    brandNameMap[item.brand.id] = item.brand.name;
+  }
+
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
       <Header corpusCount={result.totalCreativesCount} />
@@ -99,6 +111,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
               facets={facets}
               totalCount={result.totalCreativesCount}
               totalAdsCount={result.totalCanonicalAdsCount}
+              brandNameMap={brandNameMap}
             />
           </Suspense>
         </section>

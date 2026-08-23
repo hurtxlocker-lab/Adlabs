@@ -20,7 +20,6 @@ import {
   parseDiscoveryFiltersFromParams,
   parseSortFromParams,
 } from "../utils/url-filters";
-import { AstryxScope } from "@/components/ui/astryx";
 import { FilterRail } from "./filters/filter-rail";
 import { MoreFiltersPopover } from "./filters/more-filters";
 import { ActiveFilterTokens } from "./filters/active-filter-tokens";
@@ -31,9 +30,15 @@ export interface FilterPanelProps {
   facets: DiscoveryFacetsResult;
   totalCount: number;
   totalAdsCount?: number;
+  brandNameMap?: Record<string, string>;
 }
 
-export function FilterPanel({ facets, totalCount, totalAdsCount }: FilterPanelProps) {
+export function FilterPanel({
+  facets,
+  totalCount,
+  totalAdsCount,
+  brandNameMap,
+}: FilterPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -149,12 +154,17 @@ export function FilterPanel({ facets, totalCount, totalAdsCount }: FilterPanelPr
   // Derived state
   // ---------------------------------------------------------------------------
 
-  const tokens = deriveActiveTokens(currentFilter, facets, {
-    toggleStringArray,
-    toggleBoolean,
-    clearRange,
-    clearSingle,
-  });
+  const tokens = deriveActiveTokens(
+    currentFilter,
+    facets,
+    {
+      toggleStringArray,
+      toggleBoolean,
+      clearRange,
+      clearSingle,
+    },
+    brandNameMap,
+  );
 
   const moreFiltersContentProps = {
     facets,
@@ -179,51 +189,50 @@ export function FilterPanel({ facets, totalCount, totalAdsCount }: FilterPanelPr
 
   return (
     <div className="w-full font-sans" data-testid="filter-panel">
-      <AstryxScope>
-        {/* Desktop primary rail */}
-        <div className="hidden lg:flex flex-col gap-4">
-          <FilterRail
-            facets={facets}
-            filter={currentFilter}
-            currentSort={currentSort}
-            onToggleStringArray={toggleStringArray}
-            onSetBoolean={setBoolean}
-            onSetRange={setRange}
-            onClearRange={clearRange}
-            onSort={applySort}
-            moreFilters={
-              <MoreFiltersPopover
-                {...moreFiltersContentProps}
-                triggerLabel="More filters"
-                badgeCount={moreActiveCount}
-              />
-            }
-          />
-        </div>
-
-        {/* Mobile compact row */}
-        <div className="lg:hidden flex flex-wrap items-center gap-3 mb-4">
-          <MoreFiltersPopover
-            {...moreFiltersContentProps}
-            triggerLabel="Filters"
-            badgeCount={tokens.length}
-          />
-          <span className="text-[11px] font-mono text-[#686e7b]">
-            Showing {totalCount.toLocaleString()}
-          </span>
-          <div className="ml-auto">
-            <SortControl value={currentSort} onChange={applySort} />
-          </div>
-        </div>
-
-        {/* Active filter tokens + count */}
-        <ActiveFilterTokens
-          tokens={tokens}
-          totalCount={totalCount}
-          totalAdsCount={totalAdsCount}
-          onClearAll={clearAll}
+      {/* Desktop primary rail */}
+      <div className="hidden lg:flex flex-col gap-4">
+        <FilterRail
+          facets={facets}
+          filter={currentFilter}
+          currentSort={currentSort}
+          brandNameMap={brandNameMap}
+          onToggleStringArray={toggleStringArray}
+          onSetBoolean={setBoolean}
+          onSetRange={setRange}
+          onClearRange={clearRange}
+          onSort={applySort}
+          moreFilters={
+            <MoreFiltersPopover
+              {...moreFiltersContentProps}
+              triggerLabel="More filters"
+              badgeCount={moreActiveCount}
+            />
+          }
         />
-      </AstryxScope>
+      </div>
+
+      {/* Mobile compact row */}
+      <div className="lg:hidden flex flex-wrap items-center gap-3 mb-4">
+        <MoreFiltersPopover
+          {...moreFiltersContentProps}
+          triggerLabel="Filters"
+          badgeCount={tokens.length}
+        />
+        <span className="text-[11px] font-mono text-[#686e7b]">
+          Showing {totalCount.toLocaleString()}
+        </span>
+        <div className="ml-auto">
+          <SortControl value={currentSort} onChange={applySort} />
+        </div>
+      </div>
+
+      {/* Active filter tokens + count */}
+      <ActiveFilterTokens
+        tokens={tokens}
+        totalCount={totalCount}
+        totalAdsCount={totalAdsCount}
+        onClearAll={clearAll}
+      />
     </div>
   );
 }

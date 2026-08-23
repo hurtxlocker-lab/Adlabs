@@ -1,15 +1,11 @@
 "use client";
 
-import {
-  CheckboxList,
-  CheckboxListItem,
-  Popover,
-} from "@/components/ui/astryx";
 import type {
   DiscoveryFacetsResult,
   DiscoveryFilterInput,
 } from "@/discovery/filters/types";
 import type { CreativeShapeFamily } from "@/features/discover/utils/creative-shape";
+import { NativePopover } from "./native-popover";
 
 export interface CreativeFilterContentProps {
   facets: DiscoveryFacetsResult;
@@ -42,60 +38,76 @@ export function CreativeFilterContent({
   const hasShapes = facets.shapeFamilies.length > 0;
 
   return (
-    <div className="flex flex-col gap-4 p-1 max-h-[70vh] overflow-y-auto font-sans">
+    <div className="flex flex-col gap-4 font-sans">
       {hasFormats && (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           <SectionHeading>Format</SectionHeading>
-          <CheckboxList
-            label="Format"
-            isLabelHidden
-            density="compact"
-            value={activeFormats}
-            onChange={(values) => {
-              const diff = [
-                ...activeFormats.filter((v) => !values.includes(v)),
-                ...values.filter((v) => !activeFormats.includes(v)),
-              ];
-              diff.forEach((d) => onToggleFormat(d));
-            }}
-          >
-            {facets.mediaTypes.map((mt) => (
-              <CheckboxListItem
-                key={mt.value}
-                label={mt.value.charAt(0) + mt.value.slice(1).toLowerCase()}
-                value={mt.value}
-                endContent={<CountBadge count={mt.count} />}
-              />
-            ))}
-          </CheckboxList>
+          <div className="flex flex-col gap-1">
+            {facets.mediaTypes.map((mt) => {
+              const isChecked = activeFormats.includes(mt.value);
+              const label =
+                mt.value.charAt(0) + mt.value.slice(1).toLowerCase();
+              return (
+                <label
+                  key={mt.value}
+                  className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => onToggleFormat(mt.value)}
+                      className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+                    />
+                    <span
+                      className={`truncate ${isChecked ? "text-[#f3f4f6] font-medium" : ""}`}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                  <CountBadge count={mt.count} />
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {hasShapes && (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           <SectionHeading>Shape</SectionHeading>
-          <CheckboxList
-            label="Shape"
-            isLabelHidden
-            density="compact"
-            value={activeShapes}
-            onChange={(values) => {
-              const diff = [
-                ...activeShapes.filter((v) => !values.includes(v)),
-                ...values.filter((v) => !activeShapes.includes(v as CreativeShapeFamily)),
-              ];
-              diff.forEach((d) => onToggleShape(d as CreativeShapeFamily));
-            }}
-          >
-            {facets.shapeFamilies.map((sf) => (
-              <CheckboxListItem
-                key={sf.value}
-                label={sf.value.charAt(0).toUpperCase() + sf.value.slice(1)}
-                value={sf.value}
-                endContent={<CountBadge count={sf.count} />}
-              />
-            ))}
-          </CheckboxList>
+          <div className="flex flex-col gap-1">
+            {facets.shapeFamilies.map((sf) => {
+              const isChecked = activeShapes.includes(
+                sf.value as CreativeShapeFamily,
+              );
+              const label =
+                sf.value.charAt(0).toUpperCase() + sf.value.slice(1);
+              return (
+                <label
+                  key={sf.value}
+                  className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() =>
+                        onToggleShape(sf.value as CreativeShapeFamily)
+                      }
+                      className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+                    />
+                    <span
+                      className={`truncate ${isChecked ? "text-[#f3f4f6] font-medium" : ""}`}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                  <CountBadge count={sf.count} />
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -121,8 +133,13 @@ export function CreativeFilterPopover({
       const s = activeShapes[0];
       triggerLabel = s.charAt(0).toUpperCase() + s.slice(1);
     }
-  } else if (totalSelected === 2 && activeFormats.length === 1 && activeShapes.length === 1) {
-    const f = activeFormats[0].charAt(0) + activeFormats[0].slice(1).toLowerCase();
+  } else if (
+    totalSelected === 2 &&
+    activeFormats.length === 1 &&
+    activeShapes.length === 1
+  ) {
+    const f =
+      activeFormats[0].charAt(0) + activeFormats[0].slice(1).toLowerCase();
     const s = activeShapes[0].charAt(0).toUpperCase() + activeShapes[0].slice(1);
     triggerLabel = `${f} · ${s}`;
   } else if (totalSelected > 0) {
@@ -137,32 +154,36 @@ export function CreativeFilterPopover({
   }
 
   return (
-    <Popover
-      label="Creative"
-      placement="below"
-      alignment="start"
+    <NativePopover
       width={280}
-      content={
+      trigger={({ isOpen, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
+            totalSelected > 0
+              ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
+              : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
+          }`}
+          aria-label={`Filter by Creative properties (${totalSelected} active)`}
+        >
+          <span>{triggerLabel}</span>
+          <span className="text-[10px] text-[#686e7b]" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+      )}
+    >
+      {() => (
         <CreativeFilterContent
           facets={facets}
           filter={filter}
           onToggleFormat={onToggleFormat}
           onToggleShape={onToggleShape}
         />
-      }
-    >
-      <button
-        type="button"
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
-          totalSelected > 0
-            ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
-            : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
-        }`}
-        aria-label={`Filter by Creative properties (${totalSelected} active)`}
-      >
-        <span>{triggerLabel}</span>
-        <span className="text-[10px] text-[#686e7b]" aria-hidden="true">▾</span>
-      </button>
-    </Popover>
+      )}
+    </NativePopover>
   );
 }

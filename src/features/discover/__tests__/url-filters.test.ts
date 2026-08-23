@@ -163,9 +163,14 @@ describe("URL Filter Codec — buildDiscoveryFilterParams", () => {
     expect(params.get("active")).toBe("true");
   });
 
-  it("omits RECENTLY_SEEN (default sort)", () => {
-    const params = buildDiscoveryFilterParams({}, "RECENTLY_SEEN");
+  it("omits EXPLORE (default sort)", () => {
+    const params = buildDiscoveryFilterParams({}, "EXPLORE");
     expect(params.has("sort")).toBe(false);
+  });
+
+  it("encodes RECENTLY_SEEN sort", () => {
+    const params = buildDiscoveryFilterParams({}, "RECENTLY_SEEN");
+    expect(params.get("sort")).toBe("RECENTLY_SEEN");
   });
 
   it("encodes non-default sort", () => {

@@ -38,6 +38,7 @@ export interface FilterRailProps {
   filter: DiscoveryFilterInput;
   currentSort: DiscoverySort;
   moreFilters: React.ReactNode;
+  brandNameMap?: Record<string, string>;
   onToggleStringArray: (key: keyof DiscoveryFilterInput, value: string) => void;
   onSetBoolean: (key: keyof DiscoveryFilterInput, checked: boolean) => void;
   onSetRange: (
@@ -58,6 +59,7 @@ export function FilterRail({
   filter,
   currentSort,
   moreFilters,
+  brandNameMap,
   onToggleStringArray,
   onSetBoolean,
   onSetRange,
@@ -92,6 +94,7 @@ export function FilterRail({
       <BrandFilterPopover
         facets={facets}
         filter={filter}
+        brandNameMap={brandNameMap}
         onToggleBrand={(brandId) => onToggleStringArray("brandIds", brandId)}
       />
 

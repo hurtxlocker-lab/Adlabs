@@ -9,16 +9,9 @@
  *  - Delivery: Target countries
  *  - Evidence: UK transparency evidence
  *
- * Astryx owns the popover layer: focus trapping, keyboard navigation, Escape
- * and outside-click dismissal, focus restoration, and positioning.
+ * Built with native HTML form controls and AdLabs NativePopover.
  */
 
-import {
-  CheckboxList,
-  CheckboxListItem,
-  MultiSelector,
-  Popover,
-} from "@/components/ui/astryx";
 import type {
   DiscoveryFacetsResult,
   DiscoveryFilterInput,
@@ -27,6 +20,7 @@ import { CREATIVE_REUSE_BANDS } from "@/discovery/filters/bands";
 import { countryLabel } from "./country-labels";
 import { BandSelectFilter } from "./band-select-filter";
 import { detectReuseBandKey, REUSE_BAND_LABELS } from "./bands";
+import { NativePopover } from "./native-popover";
 
 const IG_FOLLOWER_BAND_MIN: Record<string, number> = {
   LT_10K: 0,
@@ -77,6 +71,21 @@ export function MoreFiltersContent({
   const platformOptions = facets.publisherPlatforms;
   const targetCountryOptions = facets.targetCountries;
   const ukCount = facets.transparencyEvidence.UK.true;
+
+  const activeCta = filter.ctaTypes ?? [];
+  const activePlatforms = filter.publisherPlatforms ?? [];
+  const activeTargetCountries = filter.targetCountries ?? [];
+
+  const toggleStringArrayItem = (
+    key: keyof DiscoveryFilterInput,
+    value: string,
+  ) => {
+    const current = (filter[key] as string[] | undefined) ?? [];
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+    onSetStringArray(key, next);
+  };
 
   const reuseKey = detectReuseBandKey(filter);
   const reuseOptions = facets.creativeReuseBands
@@ -134,46 +143,82 @@ export function MoreFiltersContent({
   const showEvidence = ukCount > 0 || filter.hasUkTransparencyEvidence === true;
 
   return (
-    <div className="flex flex-col gap-5 p-1">
+    <div className="flex flex-col gap-5 font-sans">
+      {/* 1. CREATIVE */}
       {showCreative && (
         <div className="flex flex-col gap-3">
           <GroupHeading>Creative</GroupHeading>
+
           {ctaOptions.length > 0 && (
-            <CheckboxList
-              label="CTA type"
-              isLabelHidden
-              density="compact"
-              value={filter.ctaTypes ?? []}
-              onChange={(v) => onSetStringArray("ctaTypes", v)}
-            >
-              {ctaOptions.map((c) => (
-                <CheckboxListItem
-                  key={c.value}
-                  label={c.value}
-                  value={c.value}
-                  endContent={<CountBadge count={c.count} />}
-                />
-              ))}
-            </CheckboxList>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-[#8e95a2]">CTA type</span>
+              <div className="overflow-y-auto max-h-[140px] flex flex-col gap-1 pr-1">
+                {ctaOptions.map((c) => {
+                  const isChecked = activeCta.includes(c.value);
+                  return (
+                    <label
+                      key={c.value}
+                      className="flex items-center justify-between gap-2 px-1.5 py-0.5 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() =>
+                            toggleStringArrayItem("ctaTypes", c.value)
+                          }
+                          className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+                        />
+                        <span
+                          className={`truncate ${isChecked ? "text-[#f3f4f6] font-medium" : ""}`}
+                        >
+                          {c.value}
+                        </span>
+                      </div>
+                      <CountBadge count={c.count} />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           )}
+
           {platformOptions.length > 0 && (
-            <CheckboxList
-              label="Platform"
-              isLabelHidden
-              density="compact"
-              value={filter.publisherPlatforms ?? []}
-              onChange={(v) => onSetStringArray("publisherPlatforms", v)}
-            >
-              {platformOptions.map((p) => (
-                <CheckboxListItem
-                  key={p.value}
-                  label={p.value.charAt(0) + p.value.slice(1).toLowerCase()}
-                  value={p.value}
-                  endContent={<CountBadge count={p.count} />}
-                />
-              ))}
-            </CheckboxList>
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-[#8e95a2]">Platform</span>
+              <div className="flex flex-col gap-1">
+                {platformOptions.map((p) => {
+                  const isChecked = activePlatforms.includes(p.value);
+                  const label =
+                    p.value.charAt(0) + p.value.slice(1).toLowerCase();
+                  return (
+                    <label
+                      key={p.value}
+                      className="flex items-center justify-between gap-2 px-1.5 py-0.5 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() =>
+                            toggleStringArrayItem("publisherPlatforms", p.value)
+                          }
+                          className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+                        />
+                        <span
+                          className={`truncate ${isChecked ? "text-[#f3f4f6] font-medium" : ""}`}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                      <CountBadge count={p.count} />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           )}
+
           {reuseOptions.length > 0 && (
             <BandSelectFilter
               id="more-creative-reuse"
@@ -186,6 +231,7 @@ export function MoreFiltersContent({
         </div>
       )}
 
+      {/* 2. ACCOUNT */}
       {showAccount && (
         <div className="flex flex-col gap-3">
           <GroupHeading>Account</GroupHeading>
@@ -204,45 +250,68 @@ export function MoreFiltersContent({
         </div>
       )}
 
+      {/* 3. DELIVERY */}
       {showDelivery && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <GroupHeading>Delivery</GroupHeading>
-          <MultiSelector
-            label="Target country"
-            isLabelHidden
-            size="sm"
-            variant="input"
-            triggerDisplay="labels"
-            maxBadges={2}
-            options={targetCountryOptions.map((c) => ({
-              value: c.value,
-              label: countryLabel(c.value),
-            }))}
-            value={filter.targetCountries ?? []}
-            onChange={(v) => onSetStringArray("targetCountries", v)}
-          />
+          <span className="text-[11px] text-[#8e95a2]">Target country</span>
+          <div className="overflow-y-auto max-h-[140px] flex flex-col gap-1 pr-1">
+            {targetCountryOptions.map((c) => {
+              const isChecked = activeTargetCountries.includes(c.value);
+              return (
+                <label
+                  key={c.value}
+                  className="flex items-center justify-between gap-2 px-1.5 py-0.5 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() =>
+                        toggleStringArrayItem("targetCountries", c.value)
+                      }
+                      className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
+                    />
+                    <span
+                      className={`truncate ${isChecked ? "text-[#f3f4f6] font-medium" : ""}`}
+                    >
+                      {countryLabel(c.value)}
+                    </span>
+                  </div>
+                  <CountBadge count={c.count} />
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
 
+      {/* 4. EVIDENCE */}
       {showEvidence && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <GroupHeading>Evidence</GroupHeading>
-          <div className="flex items-center gap-2">
-            <CheckboxList
-              label="UK Evidence"
-              isLabelHidden
-              density="compact"
-              value={filter.hasUkTransparencyEvidence === true ? ["true"] : []}
-              onChange={(values) =>
-                onSetBoolean("hasUkTransparencyEvidence", values.includes("true"))
-              }
-            >
-              <CheckboxListItem
-                label={`UK transparency${ukCount > 0 ? ` · ${ukCount}` : ""}`}
-                value="true"
+          <label className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filter.hasUkTransparencyEvidence === true}
+                onChange={(e) =>
+                  onSetBoolean("hasUkTransparencyEvidence", e.target.checked)
+                }
+                className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
               />
-            </CheckboxList>
-          </div>
+              <span
+                className={
+                  filter.hasUkTransparencyEvidence === true
+                    ? "text-[#f3f4f6] font-medium"
+                    : ""
+                }
+              >
+                UK transparency
+              </span>
+            </div>
+            {ukCount > 0 && <CountBadge count={ukCount} />}
+          </label>
         </div>
       )}
     </div>
@@ -264,37 +333,37 @@ export function MoreFiltersPopover({
   const isSelected = badgeCount !== undefined && badgeCount > 0;
 
   return (
-    <Popover
-      label={triggerLabel}
-      placement="below"
-      alignment="start"
-      width={360}
-      content={
-        <div className="max-h-[70vh] overflow-y-auto font-sans">
-          <MoreFiltersContent {...contentProps} />
-        </div>
-      }
-    >
-      <button
-        type="button"
-        className={
-          triggerClassName ??
-          `inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
-            isSelected
-              ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
-              : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
-          }`
-        }
-        aria-label={`More filters (${badgeCount ?? 0} active)`}
-      >
-        <span>{triggerLabel}</span>
-        {isSelected && (
-          <span className="font-mono text-[10px] text-[#d46b38]">
-            · {badgeCount}
+    <NativePopover
+      width={340}
+      trigger={({ isOpen, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-haspopup="dialog"
+          aria-expanded={isOpen}
+          className={
+            triggerClassName ??
+            `inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-sans border transition-colors cursor-pointer rounded-[3px] ${
+              isSelected
+                ? "border-[#d46b38] bg-[#d46b3810] text-[#f3f4f6]"
+                : "border-[#1e222d] text-[#9da2ad] hover:border-[#2a2f3d] hover:text-[#c5c9d4] bg-[#090b10]"
+            }`
+          }
+          aria-label={`More filters (${badgeCount ?? 0} active)`}
+        >
+          <span>{triggerLabel}</span>
+          {isSelected && (
+            <span className="font-mono text-[10px] text-[#d46b38]">
+              · {badgeCount}
+            </span>
+          )}
+          <span className="text-[10px] text-[#686e7b]" aria-hidden="true">
+            ▾
           </span>
-        )}
-        <span className="text-[10px] text-[#686e7b]" aria-hidden="true">▾</span>
-      </button>
-    </Popover>
+        </button>
+      )}
+    >
+      {() => <MoreFiltersContent {...contentProps} />}
+    </NativePopover>
   );
 }

@@ -346,7 +346,7 @@ export function buildDiscoveryFilterParams(
     );
   }
 
-  if (sort && sort !== "EXPLORE" && sort !== "RECENTLY_SEEN") {
+  if (sort && sort !== "EXPLORE") {
     params.set(DISCOVERY_URL_PARAMS.sort, sort);
   }
 

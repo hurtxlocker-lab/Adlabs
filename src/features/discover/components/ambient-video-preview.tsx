@@ -24,26 +24,18 @@ interface AmbientVideoPreviewProps {
   onEngageChange?: (isEngaged: boolean) => void;
 }
 
-function subscribeTouchOrReducedMotion(callback: () => void) {
+function subscribeReducedMotion(callback: () => void) {
   if (typeof window === "undefined") return () => {};
-  const touchMedia = window.matchMedia("(hover: none), (pointer: coarse)");
   const motionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-  touchMedia.addEventListener("change", callback);
   motionMedia.addEventListener("change", callback);
-
   return () => {
-    touchMedia.removeEventListener("change", callback);
     motionMedia.removeEventListener("change", callback);
   };
 }
 
-function getTouchOrReducedMotionSnapshot(): boolean {
+function getReducedMotionSnapshot(): boolean {
   if (typeof window === "undefined") return false;
-  return (
-    window.matchMedia("(hover: none), (pointer: coarse)").matches ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function getServerSnapshot(): boolean {
@@ -68,20 +60,23 @@ export function AmbientVideoPreview({
   const [isClusterPaused, setIsClusterPaused] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [videoError, setVideoError] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
-  // 1. Detect Touch / Reduced Motion Environment
-  const isTouchOrReducedMotion = useSyncExternalStore(
-    subscribeTouchOrReducedMotion,
-    getTouchOrReducedMotionSnapshot,
+  // 1. Accessibility: Detect Reduced Motion
+  const isReducedMotion = useSyncExternalStore(
+    subscribeReducedMotion,
+    getReducedMotionSnapshot,
     getServerSnapshot,
   );
 
   // Has a valid PREVIEW_LOOP derivative available
-  const hasPreviewLoop = Boolean(previewLoopUrl && previewLoopUrl.trim() !== "");
+  const hasPreviewLoop = Boolean(
+    previewLoopUrl && previewLoopUrl.trim() !== "",
+  );
 
   // 2. Viewport Intersection & Max-3 Concurrency Registration
   useEffect(() => {
-    if (isTouchOrReducedMotion || mode === "engaged" || !hasPreviewLoop) return;
+    if (isReducedMotion || mode === "engaged" || !hasPreviewLoop) return;
 
     const el = containerRef.current;
     if (!el) return;
@@ -105,20 +100,26 @@ export function AmbientVideoPreview({
         isLead,
         domOrder,
         isVisible: false,
+        intersectionRatio: 0,
       },
       (isAllowed) => {
         setIsEligible(isAllowed);
       },
     );
 
+    // Mobile & Desktop Intersection Observer: ~60% meaningful intersection
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          const isVisible = entry.isIntersecting && entry.intersectionRatio > 0.15;
-          updateAmbientCandidate(id, { isVisible });
+          const isVisible =
+            entry.isIntersecting && entry.intersectionRatio >= 0.55;
+          updateAmbientCandidate(id, {
+            isVisible,
+            intersectionRatio: entry.intersectionRatio,
+          });
         }
       },
-      { threshold: [0, 0.2, 0.5] },
+      { threshold: [0, 0.25, 0.5, 0.6, 0.75] },
     );
 
     observer.observe(el);
@@ -127,11 +128,11 @@ export function AmbientVideoPreview({
       observer.disconnect();
       unregister();
     };
-  }, [id, clusterId, isLead, isTouchOrReducedMotion, mode, hasPreviewLoop]);
+  }, [id, clusterId, isLead, isReducedMotion, mode, hasPreviewLoop]);
 
   // 3. Cluster Neighbor Focus Subscription (Pauses sibling ambient motion on NOTICE)
   useEffect(() => {
-    if (!clusterId || isTouchOrReducedMotion || mode === "engaged") return;
+    if (!clusterId || isReducedMotion || mode === "engaged") return;
 
     return subscribeClusterFocus(clusterId, (focusedItemId) => {
       if (focusedItemId !== null && focusedItemId !== id) {
@@ -140,7 +141,7 @@ export function AmbientVideoPreview({
         setIsClusterPaused(false);
       }
     });
-  }, [id, clusterId, isTouchOrReducedMotion, mode]);
+  }, [id, clusterId, isReducedMotion, mode]);
 
   // 4. Discover Full Video Coordination Subscription
   useEffect(() => {
@@ -157,18 +158,23 @@ export function AmbientVideoPreview({
     hasPreviewLoop &&
     isEligible &&
     !isClusterPaused &&
-    !isTouchOrReducedMotion &&
-    !videoError;
+    !isReducedMotion &&
+    !videoError &&
+    !autoplayBlocked;
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || mode !== "ambient") return;
 
     if (shouldPlayAmbient) {
+      // Ensure explicit DOM property initialization for Safari / iOS WebKit
+      video.defaultMuted = true;
+      video.muted = true;
       const playPromise = video.play();
       if (playPromise !== undefined) {
         playPromise.catch(() => {
-          // Autoplay rejected safely
+          // Autoplay refused by browser policy (e.g. low power mode) — fail gracefully
+          setAutoplayBlocked(true);
         });
       }
     } else {
@@ -197,18 +203,26 @@ export function AmbientVideoPreview({
     }, 0);
   };
 
-  // 7. Hover / Focus NOTICE Event Handlers
+  // 7. Hover / Focus NOTICE Event Handlers (Desktop)
   const handleMouseEnter = () => {
-    if (mode !== "ambient" || isTouchOrReducedMotion) return;
+    if (mode !== "ambient" || isReducedMotion) return;
     updateAmbientCandidate(id, { isFocused: true });
     if (clusterId) notifyClusterFocus(clusterId, id);
   };
 
   const handleMouseLeave = () => {
-    if (mode !== "ambient" || isTouchOrReducedMotion) return;
+    if (mode !== "ambient" || isReducedMotion) return;
     updateAmbientCandidate(id, { isFocused: false });
     if (clusterId) notifyClusterFocus(clusterId, null);
   };
+
+  const showFallbackPlayAffordance =
+    mode === "ambient" &&
+    (isReducedMotion ||
+      videoError ||
+      autoplayBlocked ||
+      !hasPreviewLoop ||
+      !isEligible);
 
   return (
     <div
@@ -219,35 +233,39 @@ export function AmbientVideoPreview({
       onBlur={handleMouseLeave}
       className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden"
     >
-      {/* 1. Independent Static Poster Layer (Immediate First Paint) */}
+      {/* 1. Static Poster Layer (Deferred loading below-the-fold) */}
       {posterUrl && (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={posterUrl}
           alt={title || "Ad creative thumbnail"}
-          loading="eager"
+          loading={isLead ? "eager" : "lazy"}
           decoding="async"
           className="absolute inset-0 w-full h-full max-w-full max-h-full object-contain object-center pointer-events-none"
         />
       )}
 
-      {/* 2. Ambient Video Layer (PREVIEW_LOOP derivative only, mounted when eligible) */}
-      {mode === "ambient" && hasPreviewLoop && isEligible && !videoError && (
-        <video
-          ref={videoRef}
-          src={previewLoopUrl!}
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          onLoadedData={() => setIsVideoLoaded(true)}
-          onError={() => setVideoError(true)}
-          className={`absolute inset-0 w-full h-full max-w-full max-h-full object-contain object-center cursor-pointer transition-opacity duration-200 ${
-            isVideoLoaded ? "opacity-100" : "opacity-0"
-          }`}
-          onClick={handleEngage}
-        />
-      )}
+      {/* 2. Ambient Video Layer (PREVIEW_LOOP derivative mounted when eligible) */}
+      {mode === "ambient" &&
+        hasPreviewLoop &&
+        isEligible &&
+        !videoError &&
+        !autoplayBlocked && (
+          <video
+            ref={videoRef}
+            src={previewLoopUrl!}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onLoadedData={() => setIsVideoLoaded(true)}
+            onError={() => setVideoError(true)}
+            className={`absolute inset-0 w-full h-full max-w-full max-h-full object-contain object-center cursor-pointer transition-opacity duration-200 ${
+              isVideoLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={handleEngage}
+          />
+        )}
 
       {/* 3. Engaged Full Original Video Player (Full Quality / Full Duration) */}
       {mode === "engaged" && (
@@ -262,39 +280,43 @@ export function AmbientVideoPreview({
         />
       )}
 
-      {/* 4. Touch / Mobile / Fallback Play Button Overlay */}
-      {(isTouchOrReducedMotion || videoError || !hasPreviewLoop || (!isEligible && mode === "ambient")) &&
-        mode === "ambient" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none z-10">
-            <button
-              type="button"
-              aria-label={`Play video for ${title || "Commercial creative"}`}
-              onClick={handleEngage}
-              className="w-11 h-11 rounded-full bg-[#07080a]/90 border border-[#20242e] hover:border-[#3a4154] focus-visible:border-[#d46b38] text-[#f3f4f6] hover:text-white flex items-center justify-center transition-colors pointer-events-auto cursor-pointer"
+      {/* 4. Play Button Overlay Affordance */}
+      {showFallbackPlayAffordance && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none z-10">
+          <button
+            type="button"
+            aria-label={`Play video for ${title || "Commercial creative"}`}
+            onClick={handleEngage}
+            className="w-11 h-11 rounded-full bg-[#07080a]/90 border border-[#20242e] hover:border-[#3a4154] focus-visible:border-[#d46b38] text-[#f3f4f6] hover:text-white flex items-center justify-center transition-colors pointer-events-auto cursor-pointer"
+          >
+            <svg
+              className="w-4 h-4 text-current ml-0.5"
+              fill="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-4 h-4 text-current ml-0.5"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </button>
-          </div>
-        )}
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* 5. Ambient Preview NOTICE Quiet Affordance ("Watch ↗") */}
-      {mode === "ambient" && hasPreviewLoop && isEligible && !isTouchOrReducedMotion && !videoError && (
-        <button
-          type="button"
-          aria-label={`Watch full video for ${title || "Commercial creative"}`}
-          onClick={handleEngage}
-          className="absolute bottom-3 right-3 z-10 font-mono text-xs text-[#f3f4f6] bg-[#07080a]/90 border border-[#2e3340] hover:border-[#d46b38] px-2.5 py-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex items-center gap-1.5 shadow-lg cursor-pointer"
-        >
-          <span>Watch</span>
-          <span aria-hidden="true">↗</span>
-        </button>
-      )}
+      {mode === "ambient" &&
+        hasPreviewLoop &&
+        isEligible &&
+        !isReducedMotion &&
+        !videoError &&
+        !autoplayBlocked && (
+          <button
+            type="button"
+            aria-label={`Watch full video for ${title || "Commercial creative"}`}
+            onClick={handleEngage}
+            className="absolute bottom-3 right-3 z-10 font-mono text-xs text-[#f3f4f6] bg-[#07080a]/90 border border-[#2e3340] hover:border-[#d46b38] px-2.5 py-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex items-center gap-1.5 shadow-lg cursor-pointer"
+          >
+            <span>Watch</span>
+            <span aria-hidden="true">↗</span>
+          </button>
+        )}
     </div>
   );
 }
