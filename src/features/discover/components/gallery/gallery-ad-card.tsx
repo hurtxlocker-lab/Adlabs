@@ -12,6 +12,7 @@ export interface GalleryAdCardProps {
   item: AdLibraryItem;
   facts?: DiscoveryGalleryFacts;
   clusterId?: string;
+  priority?: boolean;
 }
 
 /**
@@ -24,7 +25,7 @@ export interface GalleryAdCardProps {
  * - Zero vanity KPIs, zero dates, zero CTA labels in gallery view.
  * - Primary click navigates to `/ads/[canonical-ad-id]`.
  */
-export function GalleryAdCard({ item, facts, clusterId }: GalleryAdCardProps) {
+export function GalleryAdCard({ item, facts, clusterId, priority = false }: GalleryAdCardProps) {
   const rep = resolveDiscoverRepresentativeCreative(item);
 
   const durationText = formatVideoDuration(facts?.videoDurationMs);
@@ -56,14 +57,15 @@ export function GalleryAdCard({ item, facts, clusterId }: GalleryAdCardProps) {
                 previewLoopUrl={rep.video.previewLoopUrl}
                 posterUrl={rep.preview?.browseImageUrl ?? rep.preview?.mediaUrl}
                 title={item.brand.name}
-                isLead={false}
+                isLead={priority}
               />
             ) : rep.displayMedia ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={rep.displayMedia.browseImageUrl ?? rep.displayMedia.mediaUrl}
                 alt={item.brand.name}
-                loading="lazy"
+                loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
                 className="w-full h-full object-cover object-center"
               />
             ) : null}

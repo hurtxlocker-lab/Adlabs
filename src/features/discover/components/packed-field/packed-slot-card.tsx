@@ -13,6 +13,7 @@ interface PackedSlotCardProps {
   slot: PackedFieldSlot;
   clusterId?: string;
   hook?: string | null;
+  priority?: boolean;
 }
 
 function parseSlotConstraintPx(classString?: string, type: "h" | "w" = "h"): number | null {
@@ -82,6 +83,7 @@ export function PackedSlotCard({
   slot,
   clusterId,
   hook = null,
+  priority = false,
 }: PackedSlotCardProps) {
   const rep = resolveDiscoverRepresentativeCreative(item);
   const dateWatermark = formatDateWatermark(item.firstSeenAt);
@@ -135,7 +137,7 @@ export function PackedSlotCard({
               previewLoopUrl={rep.video.previewLoopUrl}
               posterUrl={rep.preview?.browseImageUrl ?? rep.preview?.mediaUrl}
               title={item.brand.name}
-              isLead={slot.weight === "anchor"}
+              isLead={slot.weight === "anchor" || priority}
             />
           ) : rep.displayMedia ? (
             <div className="absolute inset-0 w-full h-full flex items-center justify-center">
@@ -143,7 +145,8 @@ export function PackedSlotCard({
               <img
                 src={rep.displayMedia.browseImageUrl ?? rep.displayMedia.mediaUrl}
                 alt={item.brand.name}
-                loading="lazy"
+                loading={priority ? "eager" : "lazy"}
+                fetchPriority={priority ? "high" : "auto"}
                 className="w-full h-full max-w-full max-h-full object-contain object-center"
               />
             </div>

@@ -7,7 +7,7 @@
  * Controls reflect evidence density from facets.
  */
 
-import { useCallback, useTransition } from "react";
+import { useCallback, useOptimistic, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type {
   DiscoveryFacetsResult,
@@ -44,57 +44,68 @@ export function FilterPanel({
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
-  // Parse current filter state from URL (source of truth)
-  const currentFilter = parseDiscoveryFiltersFromParams(searchParams);
-  const currentSort = parseSortFromParams(searchParams) ?? "EXPLORE";
+  // Parse canonical filter state from URL (source of truth)
+  const urlFilter = parseDiscoveryFiltersFromParams(searchParams);
+  const urlSort = parseSortFromParams(searchParams) ?? "EXPLORE";
+
+  // React 19 native useOptimistic for immediate control responsiveness (<5ms)
+  const [optimisticFilter, setOptimisticFilter] = useOptimistic(
+    urlFilter,
+    (_current, next: DiscoveryFilterInput) => next,
+  );
+  const [optimisticSort, setOptimisticSort] = useOptimistic(
+    urlSort,
+    (_current, next: DiscoverySort) => next,
+  );
 
   // ---------------------------------------------------------------------------
-  // URL mutation helpers
+  // URL mutation helpers with immediate optimistic update
   // ---------------------------------------------------------------------------
 
   const applyFilter = useCallback(
     (nextFilter: DiscoveryFilterInput, nextSort?: DiscoverySort) => {
-      const params = buildDiscoveryFilterParams(
-        nextFilter,
-        nextSort ?? currentSort,
-      );
+      const targetSort = nextSort ?? optimisticSort;
+      const params = buildDiscoveryFilterParams(nextFilter, targetSort);
       startTransition(() => {
+        setOptimisticFilter(nextFilter);
+        if (nextSort) setOptimisticSort(nextSort);
         router.replace(`${pathname}?${params.toString()}`);
       });
     },
-    [router, pathname, currentSort],
+    [router, pathname, optimisticSort, setOptimisticFilter, setOptimisticSort],
   );
 
   const updateFilter = useCallback(
     (patch: Partial<DiscoveryFilterInput>) => {
-      applyFilter({ ...currentFilter, ...patch });
+      applyFilter({ ...optimisticFilter, ...patch });
     },
-    [applyFilter, currentFilter],
+    [applyFilter, optimisticFilter],
   );
 
   const applySort = useCallback(
     (sort: DiscoverySort) => {
-      applyFilter(currentFilter, sort);
+      applyFilter(optimisticFilter, sort);
     },
-    [applyFilter, currentFilter],
+    [applyFilter, optimisticFilter],
   );
 
   const clearAll = useCallback(() => {
     const params = clearAllDiscoveryFilterParams();
     startTransition(() => {
+      setOptimisticFilter({});
       router.replace(`${pathname}?${params.toString()}`);
     });
-  }, [router, pathname]);
+  }, [router, pathname, setOptimisticFilter]);
 
   const toggleStringArray = useCallback(
     (key: keyof DiscoveryFilterInput, value: string) => {
-      const current = (currentFilter[key] as string[] | undefined) ?? [];
+      const current = (optimisticFilter[key] as string[] | undefined) ?? [];
       const next = current.includes(value)
         ? current.filter((v) => v !== value)
         : [...current, value];
       updateFilter({ [key]: next.length > 0 ? next : undefined });
     },
-    [currentFilter, updateFilter],
+    [optimisticFilter, updateFilter],
   );
 
   const setStringArray = useCallback(
@@ -106,10 +117,10 @@ export function FilterPanel({
 
   const toggleBoolean = useCallback(
     (key: keyof DiscoveryFilterInput, value: boolean) => {
-      const current = currentFilter[key];
+      const current = optimisticFilter[key];
       updateFilter({ [key]: current === value ? undefined : value });
     },
-    [currentFilter, updateFilter],
+    [optimisticFilter, updateFilter],
   );
 
   const setBoolean = useCallback(
@@ -133,22 +144,25 @@ export function FilterPanel({
 
   const clearRange = useCallback(
     (minKey: keyof DiscoveryFilterInput, maxKey: keyof DiscoveryFilterInput) => {
-      const next = { ...currentFilter };
+      const next = { ...optimisticFilter };
       delete next[minKey as never];
       delete next[maxKey as never];
       applyFilter(next);
     },
-    [currentFilter, applyFilter],
+    [optimisticFilter, applyFilter],
   );
 
   const clearSingle = useCallback(
     (key: keyof DiscoveryFilterInput) => {
-      const next = { ...currentFilter };
+      const next = { ...optimisticFilter };
       delete next[key as never];
       applyFilter(next);
     },
-    [currentFilter, applyFilter],
+    [optimisticFilter, applyFilter],
   );
+
+  const currentFilter = optimisticFilter;
+  const currentSort = optimisticSort;
 
   // ---------------------------------------------------------------------------
   // Derived state

@@ -56,6 +56,7 @@ export function PackedFieldPlate({
               item={item}
               slot={slot}
               clusterId={`plate-${plateIndex}-${slot.id}`}
+              priority={plateIndex === 0 && (slot.id === "H" || slot.id === "C")}
             />
           </div>
         );

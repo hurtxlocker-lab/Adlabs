@@ -38,11 +38,12 @@ export function CanonicalGallery({
       data-testid="canonical-gallery"
       className={`w-full grid grid-cols-1 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3 min-[1280px]:grid-cols-4 min-[1720px]:grid-cols-5 gap-4 lg:gap-5 items-start auto-rows-auto ${className}`}
     >
-      {items.map((item) => (
+      {items.map((item, idx) => (
         <GalleryAdCard
           key={item.id}
           item={item}
           facts={facts?.get(item.id)}
+          priority={idx < 2}
         />
       ))}
     </div>
