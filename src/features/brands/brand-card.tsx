@@ -139,6 +139,28 @@ export function BrandCard({
               {recencyText(item.creativeFootprint.lastSeenAt)}
             </p>
           )}
+
+          {/* Regional targeted-age summary (EU/UK transparency disclosures only).
+              MIN disclosed min / MAX disclosed max across the brand's ads.
+              Rendered only when source data supports it — no fake fallbacks. */}
+          {item.transparency.targetAgeMin !== null && item.transparency.targetAgeMax !== null && (
+            <p className="mt-1 font-mono text-[10px] text-[#686e7b]" title="Targeted age range disclosed in EU/UK transparency data">
+              EU/UK age {item.transparency.targetAgeMin}–{item.transparency.targetAgeMax}
+            </p>
+          )}
+
+          {/* Combined reported EU reach — subordinate except on REACH_SCALE.
+              SUM of per-ad disclosures; people may be counted more than once.
+              Never impressions / unique reach / brand reach. */}
+          {lens === "REACH_SCALE" && item.transparency.combinedEuReach !== null &&
+            item.transparency.combinedEuReach > 0 && (
+            <p
+              className="mt-0.5 font-mono text-[10px] text-[#8e95a2]"
+              title="Sum of reported EU reach across observed ads. People may be counted more than once."
+            >
+              Combined reported EU reach {formatCompact(item.transparency.combinedEuReach)}
+            </p>
+          )}
         </div>
       </div>
 
