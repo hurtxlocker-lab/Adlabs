@@ -87,7 +87,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
 
   return (
     <div className="min-h-screen bg-[#07080a] text-[#f3f4f6] flex flex-col selection:bg-[#d46b3820]">
-      <Header corpusCount={result.totalCreativesCount} />
+      <Header corpusCount={result.totalCreativesCount} active="discover" />
 
       <main className="flex-1 adlabs-canvas py-8 sm:py-12 pb-32 sm:pb-20 flex flex-col gap-8 lg:gap-10">
         {/* Page orientation */}
