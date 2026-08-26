@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { Header } from "@/components/navigation/header";
-import { getBrandDirectory, type BrandDirectorySort } from "@/features/brands/queries";
-import { BrandCard } from "@/features/brands/brand-card";
+import {
+  getBrandDirectory,
+  type BrandDirectorySort,
+} from "@/features/brands/queries";
+import { BrandCard, type LensKind } from "@/features/brands/brand-card";
 import {
   BrandAtlasControls,
   LENS_NARRATION,
-  type SortLens,
 } from "@/features/brands/atlas-controls";
 
 export const metadata: Metadata = {
@@ -14,12 +16,6 @@ export const metadata: Metadata = {
     "The Competitive Landscape: a living atlas of how the world's best brands run advertising.",
 };
 
-function observedDays(entries: Awaited<ReturnType<typeof getBrandDirectory>>): number {
-  if (entries.length === 0) return 0;
-  const min = Math.min(...entries.map((e) => e.firstSeenAt.getTime()));
-  return Math.max(1, Math.floor((Date.now() - min) / 86_400_000));
-}
-
 const SORT_KEYS: BrandDirectorySort[] = [
   "MOST_CREATIVES",
   "RECENTLY_ACTIVE",
@@ -27,23 +23,34 @@ const SORT_KEYS: BrandDirectorySort[] = [
   "SOCIAL_AUTHORITY",
 ];
 
+function observedDays(
+  items: Awaited<ReturnType<typeof getBrandDirectory>>,
+): number {
+  if (items.length === 0) return 0;
+  const min = Math.min(...items.map((i) => i.creativeFootprint.lastSeenAt.getTime()));
+  return Math.max(1, Math.floor((Date.now() - min) / 86_400_000));
+}
+
 export default async function BrandsPage({
   searchParams,
 }: {
   searchParams?: Promise<{ sort?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const requested = (params.sort ?? "MOST_CREATIVES") as SortLens;
+  const requested = (params.sort ?? "MOST_CREATIVES") as LensKind;
   const sort: BrandDirectorySort = SORT_KEYS.includes(requested)
     ? (requested as BrandDirectorySort)
     : "MOST_CREATIVES";
 
-  const entries = await getBrandDirectory(sort);
+  const items = await getBrandDirectory(sort);
 
-  const totalCreatives = entries.reduce((s, e) => s + e.creativeGroups, 0);
-  const activeCount = entries.filter((e) => e.isActive).length;
-  const days = observedDays(entries);
+  const totalCreatives = items.reduce((s, i) => s + i.creativeFootprint.creativeCount, 0);
+  const activeCount = items.filter(
+    (i) => i.creativeFootprint.activeCreativeCount > 0,
+  ).length;
+  const days = observedDays(items);
   const narration = LENS_NARRATION[sort] ?? "";
+  const lens: LensKind = sort;
 
   return (
     <>
@@ -70,7 +77,7 @@ export default async function BrandsPage({
           {/* Quiet facts strip */}
           <div className="mt-7 flex flex-wrap items-center gap-x-7 gap-y-2 border-y border-[#20242e] py-3 font-mono text-[11px] tabular-nums text-[#8e95a2]">
             <span>
-              <span className="text-[#f3f4f6]">{entries.length}</span> brands
+              <span className="text-[#f3f4f6]">{items.length}</span> brands
             </span>
             <span>
               <span className="text-[#f3f4f6]">{totalCreatives}</span> creatives
@@ -85,16 +92,16 @@ export default async function BrandsPage({
           </div>
         </section>
 
-        {/* ===== Controls (server-sorted entries; client search filters) ===== */}
+        {/* ===== Controls ===== */}
         <section aria-label="Directory controls" className="mt-10">
-          <BrandAtlasControls entries={entries} activeLens={sort} />
+          <BrandAtlasControls entries={items} activeLens={lens} />
           <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.06em] text-[#4e535e]">
             {narration}
           </p>
         </section>
 
         {/* ===== Polaroid wall ===== */}
-        {entries.length === 0 ? (
+        {items.length === 0 ? (
           <div className="mt-20 rounded-[4px] border border-dashed border-[#20242e] py-24 text-center">
             <p className="font-mono text-sm text-[#686e7b]">
               No brands in the atlas yet.
@@ -108,8 +115,8 @@ export default async function BrandsPage({
             aria-label="Brand dossiers"
             className="mt-8 grid grid-cols-2 gap-x-5 gap-y-9 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
           >
-            {entries.map((entry) => (
-              <BrandCard key={entry.brandId} entry={entry} />
+            {items.map((item, idx) => (
+              <BrandCard key={item.brand.slug} item={item} lens={lens} eager={idx === 0} />
             ))}
           </section>
         )}
@@ -117,3 +124,4 @@ export default async function BrandsPage({
     </>
   );
 }
+
