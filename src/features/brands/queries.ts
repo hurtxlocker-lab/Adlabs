@@ -25,12 +25,14 @@ import { sql, eq, and, inArray } from "drizzle-orm";
  * - transparency evidence: presence-only booleans per region, never summed.
  * - peakEuReach: MAX single-deployment EU reach. RANKING SIGNAL ONLY — never
  *   presented as brand/total reach.
- * - authority: latest-known source-account observation values via the
- *   projection's denormalized account columns. KNOWN SHORTCUT: the projector
- *   copies the latest source_account_observation state into the index row, so
- *   MAX() over rows of the same brand equals latest-observation value as long
- *   as all rows for a brand share the account state. Documented debt; not the
- *   domain definition.
+ * - authority: MAX() over the projection's denormalized account columns is a
+ *   serving SHORTCUT, not the domain definition. It is safe ONLY because the
+ *   current projector duplicates the latest-known source_account_observation
+ *   state across every index row of the same source account — so MAX over a
+ *   brand's rows equals the latest observation value. IF THE PROJECTION EVER
+ *   STOPS DUPLICATING LATEST ACCOUNT STATE (e.g. starts appending history),
+ *   MAX() becomes semantically unsafe and must be replaced with an explicit
+ *   latest-observation join.
  * - portrait: deterministic ranking (active → recent → start_date → stable
  *   tie-break), IMAGE→browse derivative/original, VIDEO→POSTER derivative/
  *   poster asset. Never raw video bytes into <img>. Null when no candidate
@@ -118,6 +120,9 @@ async function getBrandFacts(
       b.name AS name,
       (ARRAY_AGG(b.category) FILTER (WHERE b.category IS NOT NULL))[1] AS category,
       COUNT(DISTINCT idx.representative_media_sha256)::int AS creative_groups,
+      -- isActive is consumed 1:1 from ads.isActiveObserved by the projection
+      -- (discovery/projection/projector.ts). Brands consumes canonical
+      -- projection Running state; Brands does NOT define Running.
       COUNT(DISTINCT CASE WHEN idx.is_active = true
         THEN idx.representative_media_sha256 END)::int AS active_groups,
       MAX(idx.last_seen_at) AS last_seen_at,
@@ -333,10 +338,16 @@ async function resolvePosterDerivative(
 }
 
 /**
- * Public read model entry point. Two DB phases, zero N+1:
- *   Phase A: brand facts aggregate (1 query)
- *   Phase B: portrait resolution (3 queries: candidates, browse+poster
- *            derivatives, originals)
+ * Public read model entry point. Bounded DB phases, zero N+1:
+ *   Phase A — brand-level facts:            1 aggregate query
+ *   Phase B — portrait/media resolution:
+ *     1 ranked-candidate window query
+ *   + 1 batched browse-image-v1 derivative lookup
+ *   + 1 batched POSTER derivative lookup
+ *   + 1 batched originals lookup
+ *
+ * Query count is constant regardless of brand count. Do not collapse these
+ * phases merely to reduce statement count — semantic clarity wins per contract.
  */
 export async function getBrandDirectory(
   sort: BrandDirectorySort = "MOST_CREATIVES",
