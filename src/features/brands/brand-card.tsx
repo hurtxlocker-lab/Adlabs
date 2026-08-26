@@ -125,6 +125,14 @@ export function BrandCard({
             {contextLine(item, lens)}
           </p>
 
+          {/* Secondary deployment fact — never promoted above the lens line.
+              Factual only: canonical ad deployments currently Running. */}
+          {item.creativeFootprint.activeAdCount > 0 && (
+            <p className="mt-1 font-mono text-[10px] tabular-nums text-[#686e7b]">
+              {item.creativeFootprint.activeAdCount} active ads
+            </p>
+          )}
+
           {/* Honest recency for non-recency lenses */}
           {lens !== "RECENTLY_ACTIVE" && (
             <p className="mt-1 font-mono text-[10px] text-[#686e7b]">

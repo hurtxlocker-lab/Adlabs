@@ -117,29 +117,37 @@ describe("Brands portrait selection contract", () => {
 
 describe("Brands creative-count semantics (SQL contract)", () => {
   // Simulates the aggregate over deployment rows for one brand.
-  function aggregate(rows: Array<{ sha: string; is_active: boolean }>) {
+  // adId = canonical ad identity (PK of ad_discovery_index, one row per ad).
+  function aggregate(rows: Array<{ sha: string; adId: string; is_active: boolean }>) {
     const groups = new Set(rows.map((r) => r.sha));
     const activeGroups = new Set(rows.filter((r) => r.is_active).map((r) => r.sha));
-    return { creativeCount: groups.size, activeCreativeCount: activeGroups.size };
+    const activeAds = new Set(rows.filter((r) => r.is_active).map((r) => r.adId));
+    return {
+      creativeCount: groups.size,
+      activeCreativeCount: activeGroups.size,
+      activeAdCount: activeAds.size,
+    };
   }
 
   it("1-2. same SHA with inactive + active deployment => 1 group, 1 active", () => {
     const agg = aggregate([
-      { sha: "creative-A", is_active: false },
-      { sha: "creative-A", is_active: true },
+      { sha: "creative-A", adId: "ad-1", is_active: false },
+      { sha: "creative-A", adId: "ad-2", is_active: true },
     ]);
     expect(agg.creativeCount).toBe(1); // distinct SHA, NOT ad count (would be 2)
     expect(agg.activeCreativeCount).toBe(1);
+    expect(agg.activeAdCount).toBe(1);
   });
 
   it("3. multiple inactive deployments sharing one SHA => 1 creative, 0 active", () => {
     const agg = aggregate([
-      { sha: "creative-B", is_active: false },
-      { sha: "creative-B", is_active: false },
-      { sha: "creative-B", is_active: false },
+      { sha: "creative-B", adId: "ad-3", is_active: false },
+      { sha: "creative-B", adId: "ad-4", is_active: false },
+      { sha: "creative-B", adId: "ad-5", is_active: false },
     ]);
     expect(agg.creativeCount).toBe(1);
     expect(agg.activeCreativeCount).toBe(0);
+    expect(agg.activeAdCount).toBe(0);
   });
 
   it("4. EU and UK evidence are independent booleans (no summing)", () => {
@@ -180,6 +188,73 @@ describe("Brands creative-count semantics (SQL contract)", () => {
         x.name.localeCompare(y.name),
     );
     expect(sorted.map((r) => r.name)).toEqual(["beta", "alpha", "zeta"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// activeAdCount — DEPLOYMENT identity semantics (distinct canonical ads).
+// Contract example: SHA A (3 ads: 2 active, 1 inactive), SHA B (1 active ad),
+// SHA C (1 inactive ad) => creativeCount=3, activeCreativeCount=2, activeAdCount=3.
+// ---------------------------------------------------------------------------
+
+// Module-level aggregate for the deployment-identity block (same SQL contract
+// as the creative-count describe above: DISTINCT sha / DISTINCT adId).
+function aggDeployments(rows: Array<{ sha: string; adId: string; is_active: boolean }>) {
+  const groups = new Set(rows.map((r) => r.sha));
+  const activeGroups = new Set(rows.filter((r) => r.is_active).map((r) => r.sha));
+  const activeAds = new Set(rows.filter((r) => r.is_active).map((r) => r.adId));
+  return {
+    creativeCount: groups.size,
+    activeCreativeCount: activeGroups.size,
+    activeAdCount: activeAds.size,
+  };
+}
+
+describe("activeAdCount — deployment identity vs creative-group identity", () => {
+  it("contract example: 2-of-3 active on SHA A, 1 active on SHA B, inactive SHA C", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true },
+      { sha: "A", adId: "ad-2", is_active: true },
+      { sha: "A", adId: "ad-3", is_active: false },
+      { sha: "B", adId: "ad-4", is_active: true },
+      { sha: "C", adId: "ad-5", is_active: false },
+    ]);
+    expect(agg.creativeCount).toBe(3);
+    expect(agg.activeCreativeCount).toBe(2);
+    expect(agg.activeAdCount).toBe(3);
+  });
+
+  it("two SHAs with multiple active ads each: ads sum across groups, groups don't", () => {
+    const agg = aggDeployments([
+      { sha: "SHA-A", adId: "ad-1", is_active: true },
+      { sha: "SHA-A", adId: "ad-2", is_active: true },
+      { sha: "SHA-B", adId: "ad-3", is_active: true },
+    ]);
+    expect(agg.creativeCount).toBe(2);
+    expect(agg.activeCreativeCount).toBe(2);
+    expect(agg.activeAdCount).toBe(3);
+  });
+
+  it("4. duplicate projection rows / joins cannot inflate DISTINCT ad identity", () => {
+    // Simulates a hypothetical join fan-out: same deployment row appearing twice
+    const rows = [
+      { sha: "A", adId: "ad-1", is_active: true },
+      { sha: "A", adId: "ad-1", is_active: true }, // duplicate via join
+      { sha: "B", adId: "ad-2", is_active: true },
+    ];
+    const agg = aggDeployments(rows);
+    expect(agg.activeAdCount).toBe(2); // DISTINCT adId prevents overcount
+  });
+
+  it("6. activeAdCount derives from Running state, not lastSeen recency", () => {
+    // Recently-seen but NOT running must not count as active ad
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: false }, // seen recently, not running
+      { sha: "A", adId: "ad-2", is_active: false },
+    ]);
+    expect(agg.activeAdCount).toBe(0);
+    expect(agg.activeCreativeCount).toBe(0);
+    expect(agg.creativeCount).toBe(1); // footprint still correct
   });
 });
 
