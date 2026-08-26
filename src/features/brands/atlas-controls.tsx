@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { BrandDirectoryEntry } from "@/features/brands/queries";
+import type { BrandDirectoryItem } from "@/features/brands/queries";
 
 export type SortLens = "MOST_CREATIVES" | "RECENTLY_ACTIVE" | "REACH_SCALE" | "SOCIAL_AUTHORITY";
 
@@ -25,13 +25,21 @@ export function BrandAtlasControls({
   activeLens = "MOST_CREATIVES",
 }: {
   /** Server-sorted entries for the ACTIVE lens (arrive via URL param). */
-  entries: BrandDirectoryEntry[];
+  entries: BrandDirectoryItem[];
   activeLens?: SortLens;
 }) {
   const router = useRouter();
-  const [lens, setLens] = useState<SortLens>(activeLens);
+  // useTransition: buttons stay clickable during flight; every click starts a
+  // new transition (Next serializes same-tab navigations — last one wins).
+  // The URL param is the single source of truth for which lens is active.
+  const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
-  const [pending, setPending] = useState(false);
+
+  function selectLens(next: SortLens) {
+    startTransition(() => {
+      router.push(`/brands?sort=${next}`, { scroll: false });
+    });
+  }
 
   // Client-side search filter — instant UI response (SLO <50ms), server owns ordering.
   const filtered = useMemo(() => {
@@ -39,25 +47,17 @@ export function BrandAtlasControls({
     if (!q) return entries;
     return entries.filter(
       (e) =>
-        e.name.toLowerCase().includes(q) ||
-        (e.category ?? "").toLowerCase().includes(q) ||
-        (e.pageCategory ?? "").toLowerCase().includes(q),
+        e.brand.name.toLowerCase().includes(q) ||
+        (e.brand.category ?? "").toLowerCase().includes(q),
     );
   }, [entries, query]);
 
-  // Expose filtered count for the parent grid via data attribute on the section root
-
-  function selectLens(next: SortLens) {
-    if (next === lens) return;
-    setLens(next);
-    setPending(true);
-    // Server round-trip carries the SQL ORDER BY — deterministic ranking authority.
-    router.push(`/brands?sort=${next}`, { scroll: false });
-  }
-
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4" data-filtered-count={filtered.length}>
-      {/* Search — instant client-side filter */}
+    <div
+      className="flex flex-wrap items-center justify-between gap-4"
+      data-filtered-count={filtered.length}
+    >
+      {/* Search */}
       <div className="relative">
         <input
           type="text"
@@ -72,17 +72,19 @@ export function BrandAtlasControls({
         </kbd>
       </div>
 
-      {/* Sort lenses — server-authoritative ordering */}
+      {/* Sort lenses — URL-param authoritative. aria-pressed reflects SERVER truth
+          (activeLens prop), never optimistic guesses. isPending shows a subtle
+          spinner on the whole group while the next lens loads. Buttons always
+          clickable — last click wins. */}
       <div role="group" aria-label="Sort lens" className="flex items-center gap-1">
         {LENSES.map((l) => (
           <button
             key={l.id}
             type="button"
             onClick={() => selectLens(l.id)}
-            aria-pressed={lens === l.id}
-            disabled={pending}
-            className={`rounded-[3px] px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.05em] transition-colors disabled:opacity-60 ${
-              lens === l.id
+            aria-pressed={l.id === activeLens}
+            className={`rounded-[3px] px-2.5 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.05em] transition-colors ${
+              l.id === activeLens && !isPending
                 ? "bg-[#1c2026] text-[#f3f4f6] ring-1 ring-inset ring-[#d46b38]"
                 : "text-[#686e7b] hover:text-[#f3f4f6]"
             }`}
@@ -90,8 +92,11 @@ export function BrandAtlasControls({
             {l.label}
           </button>
         ))}
-        {pending && (
-          <span className="ml-1 h-3 w-3 animate-spin rounded-full border border-[#4e535e] border-t-transparent" />
+        {isPending && (
+          <span
+            className="ml-1 h-2.5 w-2.5 animate-spin rounded-full border border-[#8e95a2] border-t-transparent"
+            aria-label="Loading sorted results"
+          />
         )}
       </div>
     </div>

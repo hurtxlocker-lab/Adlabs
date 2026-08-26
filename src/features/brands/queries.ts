@@ -10,73 +10,32 @@ import { resolveMediaUrl } from "@/storage";
 import { sql, eq, and, inArray } from "drizzle-orm";
 
 /**
- * Brands directory — the Competitive Landscape.
+ * Brands Directory read model — the Competitive Landscape.
  *
- * One grouped aggregate over ad_discovery_index per brand:
- * creative-group volume, live status, observation recency/span,
- * EU/UK transparency presence (never summed), audience bands,
- * social authority, and the representative creative asset for
- * the polaroid portrait.
+ * PHASE A: one aggregate query for brand-level facts.
+ * PHASE B: batched deterministic portrait resolution for returned brands.
+ *
+ * SEMANTICS (contract):
+ * - creativeCount: DISTINCT (brand, representative_media_sha256) — creative
+ *   groups observed in the corpus. NOT canonical ad count.
+ * - activeCreativeCount: distinct groups where BOOL_OR(deployment running).
+ *   Running = projection isActive, which is derived 1:1 from ads.isActiveObserved
+ *   (proven: projector.ts L306 `isActive: ad.isActiveObserved`). No new
+ *   Brands-specific running definition; first/last_seen never used for Running.
+ * - transparency evidence: presence-only booleans per region, never summed.
+ * - peakEuReach: MAX single-deployment EU reach. RANKING SIGNAL ONLY — never
+ *   presented as brand/total reach.
+ * - authority: latest-known source-account observation values via the
+ *   projection's denormalized account columns. KNOWN SHORTCUT: the projector
+ *   copies the latest source_account_observation state into the index row, so
+ *   MAX() over rows of the same brand equals latest-observation value as long
+ *   as all rows for a brand share the account state. Documented debt; not the
+ *   domain definition.
+ * - portrait: deterministic ranking (active → recent → start_date → stable
+ *   tie-break), IMAGE→browse derivative/original, VIDEO→POSTER derivative/
+ *   poster asset. Never raw video bytes into <img>. Null when no candidate
+ *   yields a valid visual.
  */
-
-export interface BrandDirectoryEntry {
-  brandId: string;
-  slug: string;
-  name: string;
-  category: string | null;
-  pageCategory: string | null;
-
-  /** Distinct creative groups (brand_id + representative sha). */
-  creativeGroups: number;
-  /** Groups currently observed active in latest crawl. */
-  activeGroups: number;
-
-  lastSeenAt: Date;
-  firstSeenAt: Date;
-  /** True if any group was active in the latest observation window. */
-  isActive: boolean;
-
-  hasEuTransparency: boolean;
-  hasUkTransparency: boolean;
-
-  /** Disclosed EU reach max across groups (null when undisclosed). */
-  euReachMax: number | null;
-  /** Target age band from EU evidence (nulls allowed independently). */
-  targetAgeMin: number | null;
-  targetAgeMax: number | null;
-  targetGender: string | null;
-
-  instagramFollowers: number | null;
-  facebookLikes: number | null;
-  instagramVerified: boolean;
-  facebookVerified: boolean;
-
-  /** Representative creative image URL (browse-image-v1 preferred, original fallback). */
-  portraitUrl: string | null;
-}
-
-interface GroupedRow extends Record<string, unknown> {
-  brand_id: string;
-  slug: string;
-  name: string;
-  category: string | null;
-  page_category: string | null;
-  creative_groups: number;
-  active_groups: number;
-  last_seen_at: string;
-  first_seen_at: string;
-  has_eu: boolean;
-  has_uk: boolean;
-  eu_reach_max: string | number | null;
-  age_min: number | null;
-  age_max: number | null;
-  gender: string | null;
-  ig_followers: string | number | null;
-  fb_likes: string | number | null;
-  ig_verified: boolean;
-  fb_verified: boolean;
-  rep_media_asset_id: string | null;
-}
 
 export type BrandDirectorySort =
   | "MOST_CREATIVES"
@@ -84,104 +43,237 @@ export type BrandDirectorySort =
   | "REACH_SCALE"
   | "SOCIAL_AUTHORITY";
 
+export interface BrandDirectoryItem {
+  brand: {
+    slug: string;
+    name: string;
+    category: string | null;
+  };
+  creativeFootprint: {
+    creativeCount: number;
+    activeCreativeCount: number;
+    lastSeenAt: Date;
+  };
+  transparency: {
+    hasEuEvidence: boolean;
+    hasUkEvidence: boolean;
+    /** Peak single-deployment EU reach. Ranking signal only. */
+    peakEuReach: number | null;
+  };
+  authority: {
+    instagramFollowers: number | null;
+    facebookLikes: number | null;
+  };
+  portrait: {
+    url: string;
+    sourceKind: "IMAGE" | "VIDEO_POSTER";
+  } | null;
+}
+
+/** Deterministic SQL ordering per lens with stable final tie-breaks. */
 const SORT_SQL: Record<BrandDirectorySort, string> = {
-  MOST_CREATIVES: "creative_groups DESC, name ASC",
-  RECENTLY_ACTIVE: "last_seen_at DESC, creative_groups DESC",
-  REACH_SCALE: "eu_reach_max DESC NULLS LAST, creative_groups DESC",
-  SOCIAL_AUTHORITY: "ig_followers DESC NULLS LAST, creative_groups DESC",
+  MOST_CREATIVES:
+    "creative_groups DESC, last_seen_at DESC, lower(b.name) ASC, b.id ASC",
+  RECENTLY_ACTIVE:
+    "last_seen_at DESC, creative_groups DESC, lower(b.name) ASC, b.id ASC",
+  REACH_SCALE:
+    "eu_reach_max DESC NULLS LAST, creative_groups DESC, last_seen_at DESC, lower(b.name) ASC, b.id ASC",
+  SOCIAL_AUTHORITY:
+    "ig_followers DESC NULLS LAST, creative_groups DESC, last_seen_at DESC, lower(b.name) ASC, b.id ASC",
 };
 
-function num(v: string | number | null): number | null {
+interface BrandFactsRow extends Record<string, unknown> {
+  brand_id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  creative_groups: number;
+  active_groups: number;
+  last_seen_at: string;
+  has_eu: boolean;
+  has_uk: boolean;
+  eu_reach_max: string | number | null;
+  ig_followers: string | number | null;
+  fb_likes: string | number | null;
+}
+
+function num(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-export async function getBrandDirectory(
-  sort: BrandDirectorySort = "MOST_CREATIVES",
-): Promise<BrandDirectoryEntry[]> {
+/**
+ * PHASE A — brand-level facts aggregate.
+ */
+async function getBrandFacts(
+  sort: BrandDirectorySort,
+): Promise<BrandFactsRow[]> {
   const orderSql = SORT_SQL[sort] ?? SORT_SQL.MOST_CREATIVES;
 
-  const result = await db.execute<GroupedRow>(sql`
+  const result = await db.execute<BrandFactsRow>(sql`
     SELECT
       b.id AS brand_id,
       b.slug AS slug,
       b.name AS name,
-      b.category AS category,
-      (ARRAY_AGG(idx.latest_page_category) FILTER (WHERE idx.latest_page_category IS NOT NULL))[1] AS page_category,
-      count(DISTINCT idx.representative_media_sha256)::int AS creative_groups,
-      count(DISTINCT CASE WHEN idx.is_active = true THEN idx.representative_media_sha256 END)::int AS active_groups,
+      (ARRAY_AGG(b.category) FILTER (WHERE b.category IS NOT NULL))[1] AS category,
+      COUNT(DISTINCT idx.representative_media_sha256)::int AS creative_groups,
+      COUNT(DISTINCT CASE WHEN idx.is_active = true
+        THEN idx.representative_media_sha256 END)::int AS active_groups,
       MAX(idx.last_seen_at) AS last_seen_at,
-      MIN(idx.first_seen_at) AS first_seen_at,
-      bool_or(COALESCE(idx.has_eu_transparency_evidence, false)) AS has_eu,
-      bool_or(COALESCE(idx.has_uk_transparency_evidence, false)) AS has_uk,
+      BOOL_OR(COALESCE(idx.has_eu_transparency_evidence, false)) AS has_eu,
+      BOOL_OR(COALESCE(idx.has_uk_transparency_evidence, false)) AS has_uk,
       MAX(idx.latest_eu_total_reach) AS eu_reach_max,
-      MIN(idx.latest_eu_target_age_min) AS age_min,
-      MAX(idx.latest_eu_target_age_max) AS age_max,
-      (ARRAY_AGG(idx.latest_eu_target_gender) FILTER (WHERE idx.latest_eu_target_gender IS NOT NULL))[1] AS gender,
       MAX(idx.latest_instagram_followers) AS ig_followers,
-      MAX(idx.latest_facebook_likes) AS fb_likes,
-      bool_or(COALESCE(idx.latest_instagram_verified, false)) AS ig_verified,
-      bool_or(COALESCE(idx.latest_facebook_verified, false)) AS fb_verified,
-      (ARRAY_AGG(idx.representative_media_asset_id) FILTER (WHERE idx.representative_media_asset_id IS NOT NULL))[1] AS rep_media_asset_id
+      MAX(idx.latest_facebook_likes) AS fb_likes
     FROM ${adDiscoveryIndex} idx
     INNER JOIN ${brands} b ON b.id = idx.brand_id
     WHERE idx.representative_media_sha256 IS NOT NULL
-    GROUP BY b.id, b.slug, b.name, b.category
+    GROUP BY b.id
     ORDER BY ${sql.raw(orderSql)}
   `);
 
-  const rows: GroupedRow[] = Array.isArray(result)
-    ? (result as unknown as GroupedRow[])
-    : ((result as { rows?: GroupedRow[] })?.rows ?? []);
-
-  // Resolve portrait URLs for all representative assets in one derivative query
-  const assetIds = rows
-    .map((r) => r.rep_media_asset_id)
-    .filter((v): v is string => Boolean(v));
-
-  const portraitMap = await resolvePortraitUrls(assetIds);
-
-  return rows.map((r) => ({
-    brandId: r.brand_id,
-    slug: r.slug,
-    name: r.name,
-    category: r.category ?? r.page_category,
-    pageCategory: r.page_category,
-
-    creativeGroups: Number(r.creative_groups),
-    activeGroups: Number(r.active_groups),
-    lastSeenAt: new Date(r.last_seen_at),
-    firstSeenAt: new Date(r.first_seen_at),
-    isActive: Number(r.active_groups) > 0,
-
-    hasEuTransparency: r.has_eu === true,
-    hasUkTransparency: r.has_uk === true,
-
-    euReachMax: num(r.eu_reach_max),
-    targetAgeMin: r.age_min,
-    targetAgeMax: r.age_max,
-    targetGender: r.gender,
-
-    instagramFollowers: num(r.ig_followers),
-    facebookLikes: num(r.fb_likes),
-    instagramVerified: r.ig_verified === true,
-    facebookVerified: r.fb_verified === true,
-
-    portraitUrl: r.rep_media_asset_id ? portraitMap.get(r.rep_media_asset_id) ?? null : null,
-  }));
+  const rows: BrandFactsRow[] = Array.isArray(result)
+    ? (result as unknown as BrandFactsRow[])
+    : ((result as { rows?: BrandFactsRow[] })?.rows ?? []);
+  return rows;
 }
 
 /**
- * Resolves browse-image-v1 portrait URL per representative asset, falling back
- * to the original stored object when no READY derivative exists.
+ * PHASE B — batched deterministic portrait resolution.
+ *
+ * Ranks candidate creatives per brand: active first, most recently seen,
+ * newest source start date, stable sha tie-break. Walks the ranked list and
+ * picks the first candidate that yields a valid visual:
+ *   IMAGE → browse-image-v1 READY derivative, else canonical original image
+ *   VIDEO → POSTER derivative, else persisted poster image asset
+ * Never resolves raw video bytes for display.
  */
-async function resolvePortraitUrls(
-  sourceMediaAssetIds: string[],
-): Promise<Map<string, string>> {
-  if (sourceMediaAssetIds.length === 0) return new Map();
+async function resolvePortraits(
+  brandIds: string[],
+): Promise<Map<string, { url: string; sourceKind: "IMAGE" | "VIDEO_POSTER" }>> {
+  if (brandIds.length === 0) return new Map();
 
-  const derivativeRows = await db
+  // One query: ranked portrait candidates for every returned brand.
+  const candidatesResult = await db.execute<{
+    brand_id: string;
+    media_asset_id: string;
+    media_type: string | null;
+    storage_key: string | null;
+    rank: number;
+  }>(sql`
+    SELECT ranked.brand_id, ranked.media_asset_id, ranked.media_type,
+           ma.storage_key, ranked.rank
+    FROM (
+      SELECT
+        idx.brand_id,
+        idx.representative_media_asset_id AS media_asset_id,
+        idx.representative_media_type AS media_type,
+        ROW_NUMBER() OVER (
+          PARTITION BY idx.brand_id
+          ORDER BY
+            idx.is_active DESC NULLS LAST,
+            idx.last_seen_at DESC,
+            idx.start_date DESC NULLS LAST,
+            idx.representative_media_sha256 ASC
+        ) AS rank
+      FROM ${adDiscoveryIndex} idx
+      WHERE idx.brand_id IN (${sql.join(
+        brandIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+        AND idx.representative_media_asset_id IS NOT NULL
+    ) ranked
+    INNER JOIN ${mediaAssets} ma ON ma.id = ranked.media_asset_id
+    WHERE ma.storage_key IS NOT NULL AND ma.storage_key LIKE 'media/sha256/%'
+    ORDER BY ranked.brand_id, ranked.rank ASC
+  `);
+
+  const candidateRows = Array.isArray(candidatesResult)
+    ? (candidatesResult as unknown as Array<{
+        brand_id: string;
+        media_asset_id: string;
+        media_type: string | null;
+        storage_key: string | null;
+        rank: number;
+      }>)
+    : ((candidatesResult as { rows?: Array<typeof candidatesResult> })
+        ?.rows ?? []);
+
+  type Candidate = {
+    assetId: string;
+    mediaType: string | null;
+    rank: number;
+  };
+  const byBrand = new Map<string, Candidate[]>();
+  for (const r of candidateRows) {
+    if (!r.storage_key || !r.media_asset_id) continue;
+    const list = byBrand.get(r.brand_id) ?? [];
+    list.push({
+      assetId: r.media_asset_id,
+      mediaType: r.media_type,
+      rank: Number(r.rank),
+    });
+    byBrand.set(r.brand_id, list);
+  }
+
+  // Batch-resolve visuals for ALL candidate assets up front:
+  // browse-image-v1 derivatives + poster derivatives + original assets.
+  const allAssetIds = [...new Set(candidateRows.map((c) => c.media_asset_id))];
+
+  const browseMap = await resolveDisplayDerivative(allAssetIds, "browse-image-v1");
+  const posterMap = await resolvePosterDerivative(allAssetIds);
+
+  // Originals map (for image fallback)
+  const originals = await db
+    .select({ id: mediaAssets.id, storageKey: mediaAssets.storageKey })
+    .from(mediaAssets)
+    .where(inArray(mediaAssets.id, allAssetIds));
+  const originalUrlMap = new Map<string, string>();
+  for (const o of originals) {
+    if (!o.storageKey) continue;
+    try {
+      originalUrlMap.set(o.id, resolveMediaUrl(o.storageKey));
+    } catch {
+      /* unresolvable keys skipped */
+    }
+  }
+
+  const result = new Map<
+    string,
+    { url: string; sourceKind: "IMAGE" | "VIDEO_POSTER" }
+  >();
+
+  for (const [brandId, list] of byBrand) {
+    for (const cand of list.sort((a, b) => a.rank - b.rank)) {
+      if (cand.mediaType === "IMAGE") {
+        const url = browseMap.get(cand.assetId) ?? originalUrlMap.get(cand.assetId);
+        if (url) {
+          result.set(brandId, { url, sourceKind: "IMAGE" });
+          break;
+        }
+      } else if (cand.mediaType === "VIDEO") {
+        const posterUrl = posterMap.get(cand.assetId);
+        if (posterUrl) {
+          result.set(brandId, { url: posterUrl, sourceKind: "VIDEO_POSTER" });
+          break;
+        }
+        // No poster derivative: fall through to next candidate (never raw video).
+      }
+      // UNKNOWN / other types: skip to next candidate
+    }
+    // No valid candidate → brand simply absent from map → portrait=null upstream
+  }
+
+  return result;
+}
+
+async function resolveDisplayDerivative(
+  sourceAssetIds: string[],
+  recipeVersion: string,
+): Promise<Map<string, string>> {
+  if (sourceAssetIds.length === 0) return new Map();
+  const rows = await db
     .select({
       sourceMediaAssetId: mediaDerivatives.sourceMediaAssetId,
       storageKey: mediaAssets.storageKey,
@@ -190,40 +282,94 @@ async function resolvePortraitUrls(
     .innerJoin(mediaAssets, eq(mediaDerivatives.derivedMediaAssetId, mediaAssets.id))
     .where(
       and(
-        inArray(mediaDerivatives.sourceMediaAssetId, sourceMediaAssetIds),
+        inArray(mediaDerivatives.sourceMediaAssetId, sourceAssetIds),
         eq(mediaDerivatives.derivativeKind, "DISPLAY_IMAGE"),
-        eq(mediaDerivatives.recipeVersion, "browse-image-v1"),
+        eq(mediaDerivatives.recipeVersion, recipeVersion),
         eq(mediaDerivatives.status, "READY"),
       ),
     );
 
   const map = new Map<string, string>();
-  for (const row of derivativeRows) {
+  for (const row of rows) {
     if (!row.storageKey) continue;
     try {
       map.set(row.sourceMediaAssetId, resolveMediaUrl(row.storageKey));
     } catch {
-      // Ignore malformed keys — fallback path handles them
+      /* skip malformed */
     }
   }
-
-  // Fallback: originals for assets without a READY browse derivative
-  const missing = sourceMediaAssetIds.filter((id) => !map.has(id));
-  if (missing.length > 0) {
-    const originals = await db
-      .select({ id: mediaAssets.id, storageKey: mediaAssets.storageKey })
-      .from(mediaAssets)
-      .where(inArray(mediaAssets.id, missing));
-
-    for (const row of originals) {
-      if (!row.storageKey) continue;
-      try {
-        map.set(row.id, resolveMediaUrl(row.storageKey));
-      } catch {
-        // Skip unresolvable
-      }
-    }
-  }
-
   return map;
+}
+
+async function resolvePosterDerivative(
+  sourceAssetIds: string[],
+): Promise<Map<string, string>> {
+  if (sourceAssetIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      sourceMediaAssetId: mediaDerivatives.sourceMediaAssetId,
+      storageKey: mediaAssets.storageKey,
+    })
+    .from(mediaDerivatives)
+    .innerJoin(mediaAssets, eq(mediaDerivatives.derivedMediaAssetId, mediaAssets.id))
+    .where(
+      and(
+        inArray(mediaDerivatives.sourceMediaAssetId, sourceAssetIds),
+        eq(mediaDerivatives.derivativeKind, "POSTER"),
+        eq(mediaDerivatives.status, "READY"),
+      ),
+    );
+
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.storageKey) continue;
+    try {
+      map.set(row.sourceMediaAssetId, resolveMediaUrl(row.storageKey));
+    } catch {
+      /* skip malformed */
+    }
+  }
+  return map;
+}
+
+/**
+ * Public read model entry point. Two DB phases, zero N+1:
+ *   Phase A: brand facts aggregate (1 query)
+ *   Phase B: portrait resolution (3 queries: candidates, browse+poster
+ *            derivatives, originals)
+ */
+export async function getBrandDirectory(
+  sort: BrandDirectorySort = "MOST_CREATIVES",
+): Promise<BrandDirectoryItem[]> {
+  const startedAt = Date.now();
+  const facts = await getBrandFacts(sort);
+  const portraits = await resolvePortraits(facts.map((f) => f.brand_id));
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `[brands] getBrandDirectory(${sort}): ${Date.now() - startedAt}ms, ${facts.length} brands`,
+    );
+  }
+
+  return facts.map((r) => ({
+    brand: {
+      slug: r.slug,
+      name: r.name,
+      category: r.category ?? null,
+    },
+    creativeFootprint: {
+      creativeCount: Number(r.creative_groups),
+      activeCreativeCount: Number(r.active_groups),
+      lastSeenAt: new Date(r.last_seen_at),
+    },
+    transparency: {
+      hasEuEvidence: r.has_eu === true,
+      hasUkEvidence: r.has_uk === true,
+      peakEuReach: num(r.eu_reach_max),
+    },
+    authority: {
+      instagramFollowers: num(r.ig_followers),
+      facebookLikes: num(r.fb_likes),
+    },
+    portrait: portraits.get(r.brand_id) ?? null,
+  }));
 }
