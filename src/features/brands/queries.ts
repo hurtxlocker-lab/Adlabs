@@ -62,8 +62,18 @@ export interface BrandDirectoryItem {
   transparency: {
     hasEuEvidence: boolean;
     hasUkEvidence: boolean;
-    /** Peak single-deployment EU reach. Ranking signal only. */
+    /** MAX single-deployment EU reach ("how large did one ad get?"). */
     peakEuReach: number | null;
+    /** SUM of deployment-level EU reach ("how much disclosed reach exists?
+     *  People may be counted more than once — NEVER impressions/unique). */
+    combinedEuReach: number | null;
+    /**
+     * Brand-level TARGETED age summary from EU/UK transparency disclosures:
+     * MIN of disclosed mins, MAX of disclosed maxes across qualifying ads.
+     * Regional (EU/UK) — never a universal audience claim.
+     */
+    targetAgeMin: number | null;
+    targetAgeMax: number | null;
   };
   authority: {
     instagramFollowers: number | null;
@@ -99,6 +109,9 @@ interface BrandFactsRow extends Record<string, unknown> {
   has_eu: boolean;
   has_uk: boolean;
   eu_reach_max: string | number | null;
+  eu_reach_combined: string | number | null;
+  age_min: number | null;
+  age_max: number | null;
   ig_followers: string | number | null;
   fb_likes: string | number | null;
 }
@@ -138,12 +151,44 @@ async function getBrandFacts(
       MAX(idx.last_seen_at) AS last_seen_at,
       BOOL_OR(COALESCE(idx.has_eu_transparency_evidence, false)) AS has_eu,
       BOOL_OR(COALESCE(idx.has_uk_transparency_evidence, false)) AS has_uk,
+      -- peakEuReach: MAX single-deployment EU reach
       MAX(idx.latest_eu_total_reach) AS eu_reach_max,
+      -- combinedEuReach: SUM over DISTINCT canonical deployments. The inline
+      -- subquery below dedups to one row per ad_id (the table PK, proven unique
+      -- at 565=565) BEFORE aggregation, so each deployment contributes its reach
+      -- at most once. SUM(DISTINCT reach_value) is intentionally NOT used because
+      -- it would wrongly collapse distinct ads sharing an identical reach number.
+      -- NEVER label as impressions or unique reach — same person may be
+      -- counted repeatedly across deployments.
+      COALESCE(SUM(idx.latest_eu_total_reach), 0)::bigint AS eu_reach_combined,
+      -- brand-level TARGETED age summary from transparency disclosures
+      -- (EU AND UK regimes — independent regional data, never summed). MIN of
+      -- all disclosed minimums / MAX of all disclosed maximums across whichever
+      -- regions actually carry age data (typically EU, sometimes UK-only).
+      -- Regional — never a universal brand-audience claim.
+      LEAST(
+        MIN(idx.latest_eu_target_age_min) FILTER (WHERE idx.latest_eu_target_age_min IS NOT NULL),
+        MIN(idx.latest_uk_target_age_min) FILTER (WHERE idx.latest_uk_target_age_min IS NOT NULL)
+      ) AS age_min,
+      GREATEST(
+        MAX(idx.latest_eu_target_age_max) FILTER (WHERE idx.latest_eu_target_age_max IS NOT NULL),
+        MAX(idx.latest_uk_target_age_max) FILTER (WHERE idx.latest_uk_target_age_max IS NOT NULL)
+      ) AS age_max,
       MAX(idx.latest_instagram_followers) AS ig_followers,
       MAX(idx.latest_facebook_likes) AS fb_likes
-    FROM ${adDiscoveryIndex} idx
+    FROM (
+      -- One row per canonical ad (ad_id is PK): safe to SUM/EAVG reach here.
+      SELECT DISTINCT ON (idx.ad_id)
+        idx.ad_id, idx.brand_id, idx.is_active,
+        idx.representative_media_sha256, idx.last_seen_at,
+        idx.has_eu_transparency_evidence, idx.has_uk_transparency_evidence,
+        idx.latest_eu_total_reach, idx.latest_eu_target_age_min,
+        idx.latest_eu_target_age_max, idx.latest_instagram_followers,
+        idx.latest_facebook_likes
+      FROM ${adDiscoveryIndex} idx
+      WHERE idx.representative_media_sha256 IS NOT NULL
+    ) idx
     INNER JOIN ${brands} b ON b.id = idx.brand_id
-    WHERE idx.representative_media_sha256 IS NOT NULL
     GROUP BY b.id
     ORDER BY ${sql.raw(orderSql)}
   `);
@@ -387,6 +432,9 @@ export async function getBrandDirectory(
       hasEuEvidence: r.has_eu === true,
       hasUkEvidence: r.has_uk === true,
       peakEuReach: num(r.eu_reach_max),
+      combinedEuReach: num(r.eu_reach_combined),
+      targetAgeMin: r.age_min,
+      targetAgeMax: r.age_max,
     },
     authority: {
       instagramFollowers: num(r.ig_followers),

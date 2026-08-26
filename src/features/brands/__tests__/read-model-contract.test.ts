@@ -199,14 +199,43 @@ describe("Brands creative-count semantics (SQL contract)", () => {
 
 // Module-level aggregate for the deployment-identity block (same SQL contract
 // as the creative-count describe above: DISTINCT sha / DISTINCT adId).
-function aggDeployments(rows: Array<{ sha: string; adId: string; is_active: boolean }>) {
+interface DeploymentRow {
+  sha: string;
+  adId: string;
+  is_active: boolean;
+  euReach?: number | null;
+  euAgeMin?: number | null;
+  euAgeMax?: number | null;
+  ukAgeMin?: number | null;
+  ukAgeMax?: number | null;
+}
+
+/** Aggregate over DISTINCT canonical deployments (one row per ad — PK dedup). */
+function aggDeployments(rows: DeploymentRow[]) {
   const groups = new Set(rows.map((r) => r.sha));
   const activeGroups = new Set(rows.filter((r) => r.is_active).map((r) => r.sha));
   const activeAds = new Set(rows.filter((r) => r.is_active).map((r) => r.adId));
+  const euReachValues = rows
+    .map((r) => r.euReach)
+    .filter((v): v is number => typeof v === "number");
+  const ageMins = rows
+    .flatMap((r) => [r.euAgeMin, r.ukAgeMin])
+    .filter((v): v is number => typeof v === "number");
+  const ageMaxes = rows
+    .flatMap((r) => [r.euAgeMax, r.ukAgeMax])
+    .filter((v): v is number => typeof v === "number");
   return {
     creativeCount: groups.size,
+    totalAdCount: new Set(rows.map((r) => r.adId)).size,
     activeCreativeCount: activeGroups.size,
     activeAdCount: activeAds.size,
+    peakEuReach: euReachValues.length > 0 ? Math.max(...euReachValues) : null,
+    combinedEuReach:
+      euReachValues.length > 0
+        ? euReachValues.reduce((s, v) => s + v, 0)
+        : null,
+    brandAgeMin: ageMins.length > 0 ? Math.min(...ageMins) : null,
+    brandAgeMax: ageMaxes.length > 0 ? Math.max(...ageMaxes) : null,
   };
 }
 
@@ -255,6 +284,96 @@ describe("activeAdCount — deployment identity vs creative-group identity", () 
     expect(agg.activeAdCount).toBe(0);
     expect(agg.activeCreativeCount).toBe(0);
     expect(agg.creativeCount).toBe(1); // footprint still correct
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Metrics correction pass: totals, combined reach, audience band.
+// ---------------------------------------------------------------------------
+
+describe("creative/ad count totals (§9.1-9.4)", () => {
+  it("5 ads across 3 SHAs => creativeCount=3, totalAdCount=5", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true },
+      { sha: "A", adId: "ad-2", is_active: true },
+      { sha: "A", adId: "ad-3", is_active: false },
+      { sha: "B", adId: "ad-4", is_active: true },
+      { sha: "C", adId: "ad-5", is_active: false },
+    ]);
+    expect(agg.creativeCount).toBe(3);
+    expect(agg.totalAdCount).toBe(5);
+    expect(agg.activeCreativeCount).toBe(2);
+    expect(agg.activeAdCount).toBe(3);
+  });
+
+  it("multiple ads sharing one SHA do not inflate creativeCount", () => {
+    const agg = aggDeployments([
+      { sha: "X", adId: "ad-1", is_active: true },
+      { sha: "X", adId: "ad-2", is_active: true },
+      { sha: "X", adId: "ad-3", is_active: true },
+    ]);
+    expect(agg.creativeCount).toBe(1);
+    expect(agg.totalAdCount).toBe(3);
+  });
+});
+
+describe("reach semantics (§9.6-9.9)", () => {
+  it("peakEuReach = MAX single-ad reach; combinedEuReach = SUM over ads", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euReach: 500_000 },
+      { sha: "A", adId: "ad-2", is_active: true, euReach: 2_000_000 },
+      { sha: "B", adId: "ad-3", is_active: true, euReach: 300_000 },
+    ]);
+    expect(agg.peakEuReach).toBe(2_000_000);
+    expect(agg.combinedEuReach).toBe(2_800_000); // SUM across distinct ads
+  });
+
+  it("duplicated join rows cannot inflate combinedEuReach (per-ad dedup upstream)", () => {
+    // resolvePortraits-style fan-out duplicates rows per join; the Phase A
+    // subquery dedups by ad_id BEFORE aggregation, so duplicates never sum.
+    const deduped = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euReach: 700_000 },
+    ]);
+    expect(deduped.combinedEuReach).toBe(700_000); // not 1.4M
+  });
+
+  it("EU and UK reach never sum together", () => {
+    // Only EU reach values enter the aggregation; UK fields are separate columns.
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euReach: 400_000 }, // uk ignored
+    ]);
+    expect(agg.combinedEuReach).toBe(400_000);
+  });
+});
+
+describe("audience band semantics (§4, §9.11-9.12)", () => {
+  it("brand age summary = MIN disclosed min / MAX disclosed max (EU + UK, not summed)", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euAgeMin: 25, euAgeMax: 44 },
+      { sha: "B", adId: "ad-2", is_active: true, ukAgeMin: 18, ukAgeMax: 54 },
+    ]);
+    expect(agg.brandAgeMin).toBe(18); // MIN across EU+UK mins
+    expect(agg.brandAgeMax).toBe(54); // MAX across EU+UK maxes
+  });
+
+  it("UK-only age disclosure is surfaced (EU columns empty) — Huel/CeraVe case", () => {
+    // Real corpus: 4 brands carry UK targeted-age but no EU age rows.
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, ukAgeMin: 18, ukAgeMax: 65 },
+      { sha: "B", adId: "ad-2", is_active: true, ukAgeMin: 18, ukAgeMax: 65 },
+    ]);
+    expect(agg.brandAgeMin).toBe(18); // not null just because EU is empty
+    expect(agg.brandAgeMax).toBe(65);
+  });
+
+  it("missing age/reach data renders null — no fake fallback", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true },
+    ]);
+    expect(agg.brandAgeMin).toBeNull();
+    expect(agg.brandAgeMax).toBeNull();
+    expect(agg.peakEuReach).toBeNull();
+    expect(agg.combinedEuReach).toBeNull();
   });
 });
 
