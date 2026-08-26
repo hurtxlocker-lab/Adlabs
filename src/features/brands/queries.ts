@@ -54,6 +54,9 @@ export interface BrandDirectoryItem {
   creativeFootprint: {
     creativeCount: number;
     activeCreativeCount: number;
+    /** Distinct canonical ad deployments whose canonical Running state is true.
+     *  Deployment identity, NOT creative identity. Never implies performance. */
+    activeAdCount: number;
     lastSeenAt: Date;
   };
   transparency: {
@@ -91,6 +94,7 @@ interface BrandFactsRow extends Record<string, unknown> {
   category: string | null;
   creative_groups: number;
   active_groups: number;
+  active_ads: number;
   last_seen_at: string;
   has_eu: boolean;
   has_uk: boolean;
@@ -125,6 +129,12 @@ async function getBrandFacts(
       -- projection Running state; Brands does NOT define Running.
       COUNT(DISTINCT CASE WHEN idx.is_active = true
         THEN idx.representative_media_sha256 END)::int AS active_groups,
+      -- activeAdCount: DEPLOYMENT identity (canonical ads), not creative identity.
+      -- idx.ad_id is the PRIMARY KEY of ad_discovery_index => one row per
+      -- canonical ad, so DISTINCT cannot be inflated by joins. Do NOT use
+      -- representative_media_sha256 here — that is creative-group identity.
+      COUNT(DISTINCT CASE WHEN idx.is_active = true
+        THEN idx.ad_id END)::int AS active_ads,
       MAX(idx.last_seen_at) AS last_seen_at,
       BOOL_OR(COALESCE(idx.has_eu_transparency_evidence, false)) AS has_eu,
       BOOL_OR(COALESCE(idx.has_uk_transparency_evidence, false)) AS has_uk,
@@ -370,6 +380,7 @@ export async function getBrandDirectory(
     creativeFootprint: {
       creativeCount: Number(r.creative_groups),
       activeCreativeCount: Number(r.active_groups),
+      activeAdCount: Number(r.active_ads),
       lastSeenAt: new Date(r.last_seen_at),
     },
     transparency: {
