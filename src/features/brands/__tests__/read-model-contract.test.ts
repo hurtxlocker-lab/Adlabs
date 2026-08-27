@@ -218,12 +218,10 @@ function aggDeployments(rows: DeploymentRow[]) {
   const euReachValues = rows
     .map((r) => r.euReach)
     .filter((v): v is number => typeof v === "number");
-  const ageMins = rows
-    .flatMap((r) => [r.euAgeMin, r.ukAgeMin])
-    .filter((v): v is number => typeof v === "number");
-  const ageMaxes = rows
-    .flatMap((r) => [r.euAgeMax, r.ukAgeMax])
-    .filter((v): v is number => typeof v === "number");
+  const euAgeMins = rows.map((r) => r.euAgeMin).filter((v): v is number => typeof v === "number");
+  const euAgeMaxes = rows.map((r) => r.euAgeMax).filter((v): v is number => typeof v === "number");
+  const ukAgeMins = rows.map((r) => r.ukAgeMin).filter((v): v is number => typeof v === "number");
+  const ukAgeMaxes = rows.map((r) => r.ukAgeMax).filter((v): v is number => typeof v === "number");
   return {
     creativeCount: groups.size,
     totalAdCount: new Set(rows.map((r) => r.adId)).size,
@@ -234,8 +232,10 @@ function aggDeployments(rows: DeploymentRow[]) {
       euReachValues.length > 0
         ? euReachValues.reduce((s, v) => s + v, 0)
         : null,
-    brandAgeMin: ageMins.length > 0 ? Math.min(...ageMins) : null,
-    brandAgeMax: ageMaxes.length > 0 ? Math.max(...ageMaxes) : null,
+    euTargetAgeMin: euAgeMins.length > 0 ? Math.min(...euAgeMins) : null,
+    euTargetAgeMax: euAgeMaxes.length > 0 ? Math.max(...euAgeMaxes) : null,
+    ukTargetAgeMin: ukAgeMins.length > 0 ? Math.min(...ukAgeMins) : null,
+    ukTargetAgeMax: ukAgeMaxes.length > 0 ? Math.max(...ukAgeMaxes) : null,
   };
 }
 
@@ -346,34 +346,74 @@ describe("reach semantics (§9.6-9.9)", () => {
   });
 });
 
-describe("audience band semantics (§4, §9.11-9.12)", () => {
-  it("brand age summary = MIN disclosed min / MAX disclosed max (EU + UK, not summed)", () => {
+describe("audience band semantics (§4, §9.11-9.12) — OPTION A: EU/UK kept separate", () => {
+  it("EU-only: 25–44 => eu 25–44, uk null", () => {
     const agg = aggDeployments([
       { sha: "A", adId: "ad-1", is_active: true, euAgeMin: 25, euAgeMax: 44 },
-      { sha: "B", adId: "ad-2", is_active: true, ukAgeMin: 18, ukAgeMax: 54 },
     ]);
-    expect(agg.brandAgeMin).toBe(18); // MIN across EU+UK mins
-    expect(agg.brandAgeMax).toBe(54); // MAX across EU+UK maxes
+    expect(agg.euTargetAgeMin).toBe(25);
+    expect(agg.euTargetAgeMax).toBe(44);
+    expect(agg.ukTargetAgeMin).toBeNull();
+    expect(agg.ukTargetAgeMax).toBeNull();
   });
 
-  it("UK-only age disclosure is surfaced (EU columns empty) — Huel/CeraVe case", () => {
-    // Real corpus: 4 brands carry UK targeted-age but no EU age rows.
+  it("UK-only: 18–65 => uk 18–65, eu null (Huel/CeraVe case — no EU age rows)", () => {
     const agg = aggDeployments([
       { sha: "A", adId: "ad-1", is_active: true, ukAgeMin: 18, ukAgeMax: 65 },
-      { sha: "B", adId: "ad-2", is_active: true, ukAgeMin: 18, ukAgeMax: 65 },
     ]);
-    expect(agg.brandAgeMin).toBe(18); // not null just because EU is empty
-    expect(agg.brandAgeMax).toBe(65);
+    expect(agg.ukTargetAgeMin).toBe(18);
+    expect(agg.ukTargetAgeMax).toBe(65);
+    expect(agg.euTargetAgeMin).toBeNull();
+    expect(agg.euTargetAgeMax).toBeNull();
   });
 
-  it("missing age/reach data renders null — no fake fallback", () => {
+  it("EU + UK DIFFERING: EU 25–44, UK 18–65 => both preserved independently (no merged envelope)", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euAgeMin: 25, euAgeMax: 44 },
+      { sha: "B", adId: "ad-2", is_active: true, ukAgeMin: 18, ukAgeMax: 65 },
+    ]);
+    expect(agg.euTargetAgeMin).toBe(25);
+    expect(agg.euTargetAgeMax).toBe(44);
+    expect(agg.ukTargetAgeMin).toBe(18);
+    expect(agg.ukTargetAgeMax).toBe(65);
+    // Never collapse to a single 18–65 envelope:
+    expect(`${agg.euTargetAgeMin}–${agg.euTargetAgeMax}`).not.toBe("18–65");
+  });
+
+  it("EU + UK SAME range: both render identically, still separate fields", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euAgeMin: 18, euAgeMax: 65 },
+      { sha: "B", adId: "ad-2", is_active: true, ukAgeMin: 18, ukAgeMax: 65 },
+    ]);
+    expect(agg.euTargetAgeMin).toBe(18);
+    expect(agg.ukTargetAgeMin).toBe(18);
+  });
+
+  it("missing EU + missing UK => no age fact rendered (null, not a fake 0 envelope)", () => {
     const agg = aggDeployments([
       { sha: "A", adId: "ad-1", is_active: true },
     ]);
-    expect(agg.brandAgeMin).toBeNull();
-    expect(agg.brandAgeMax).toBeNull();
-    expect(agg.peakEuReach).toBeNull();
+    expect(agg.euTargetAgeMin).toBeNull();
+    expect(agg.euTargetAgeMax).toBeNull();
+    expect(agg.ukTargetAgeMin).toBeNull();
+    expect(agg.ukTargetAgeMax).toBeNull();
+  });
+});
+
+describe("reach zero-vs-null semantics (§4)", () => {
+  it("combinedEuReach = null when no deployment carries EU reach (absent evidence, not 0)", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true }, // no euReach
+    ]);
     expect(agg.combinedEuReach).toBeNull();
+  });
+
+  it("combinedEuReach = SUM when some deployments report (0-valued reports still count)", () => {
+    const agg = aggDeployments([
+      { sha: "A", adId: "ad-1", is_active: true, euReach: 0 },
+      { sha: "B", adId: "ad-2", is_active: true, euReach: 500_000 },
+    ]);
+    expect(agg.combinedEuReach).toBe(500_000); // 0 + 500k, not null
   });
 });
 

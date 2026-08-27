@@ -64,16 +64,25 @@ export interface BrandDirectoryItem {
     hasUkEvidence: boolean;
     /** MAX single-deployment EU reach ("how large did one ad get?"). */
     peakEuReach: number | null;
-    /** SUM of deployment-level EU reach ("how much disclosed reach exists?
-     *  People may be counted more than once — NEVER impressions/unique). */
+    /**
+     * SUM of deployment-level EU reach ("how much disclosed reach exists?").
+     * Per-deployment (one row per canonical ad via the subquery), EU-only.
+     * NEVER impressions / unique reach / brand reach. `null` when no brand
+     * deployment carries EU reach evidence (absent evidence, not a measured 0).
+     */
     combinedEuReach: number | null;
     /**
-     * Brand-level TARGETED age summary from EU/UK transparency disclosures:
-     * MIN of disclosed mins, MAX of disclosed maxes across qualifying ads.
-     * Regional (EU/UK) — never a universal audience claim.
+     * Target age ranges disclosed in regulatory transparency data. These are
+     * TARGETING constraints the advertiser declared — NOT observed audience
+     * composition. Regions are independent regimes and are kept SEPARATE
+     * (never merged into one envelope) because no single ad/region need
+     * disclose the union. Each is `null` when that region carries no age
+     * disclosure for the brand. Source term: "target age".
      */
-    targetAgeMin: number | null;
-    targetAgeMax: number | null;
+    euTargetAgeMin: number | null;
+    euTargetAgeMax: number | null;
+    ukTargetAgeMin: number | null;
+    ukTargetAgeMax: number | null;
   };
   authority: {
     instagramFollowers: number | null;
@@ -110,8 +119,10 @@ interface BrandFactsRow extends Record<string, unknown> {
   has_uk: boolean;
   eu_reach_max: string | number | null;
   eu_reach_combined: string | number | null;
-  age_min: number | null;
-  age_max: number | null;
+  eu_age_min: number | null;
+  eu_age_max: number | null;
+  uk_age_min: number | null;
+  uk_age_max: number | null;
   ig_followers: string | number | null;
   fb_likes: string | number | null;
 }
@@ -159,21 +170,19 @@ async function getBrandFacts(
       -- at most once. SUM(DISTINCT reach_value) is intentionally NOT used because
       -- it would wrongly collapse distinct ads sharing an identical reach number.
       -- NEVER label as impressions or unique reach — same person may be
-      -- counted repeatedly across deployments.
-      COALESCE(SUM(idx.latest_eu_total_reach), 0)::bigint AS eu_reach_combined,
-      -- brand-level TARGETED age summary from transparency disclosures
-      -- (EU AND UK regimes — independent regional data, never summed). MIN of
-      -- all disclosed minimums / MAX of all disclosed maximums across whichever
-      -- regions actually carry age data (typically EU, sometimes UK-only).
-      -- Regional — never a universal brand-audience claim.
-      LEAST(
-        MIN(idx.latest_eu_target_age_min) FILTER (WHERE idx.latest_eu_target_age_min IS NOT NULL),
-        MIN(idx.latest_uk_target_age_min) FILTER (WHERE idx.latest_uk_target_age_min IS NOT NULL)
-      ) AS age_min,
-      GREATEST(
-        MAX(idx.latest_eu_target_age_max) FILTER (WHERE idx.latest_eu_target_age_max IS NOT NULL),
-        MAX(idx.latest_uk_target_age_max) FILTER (WHERE idx.latest_uk_target_age_max IS NOT NULL)
-      ) AS age_max,
+      -- counted repeatedly across deployments. Returns NULL (not 0) when no
+      -- deployment carries EU reach evidence — absent evidence ≠ measured zero.
+      SUM(idx.latest_eu_total_reach)::bigint AS eu_reach_combined,
+      -- Target age ranges (~TARGETING constraints from transparency disclosures,
+      -- NOT observed audience composition). EU and UK are independent regional
+      -- regimes, kept SEPARATE — no single ad/region need disclose the union, so
+      -- merging them would invent a range nobody filed. Per-region MIN/MAX over
+      -- deployments that actually carry that region's age disclosure; NULL when
+      -- the region has none. Source term: "target age".
+      MIN(idx.latest_eu_target_age_min) FILTER (WHERE idx.latest_eu_target_age_min IS NOT NULL) AS eu_age_min,
+      MAX(idx.latest_eu_target_age_max) FILTER (WHERE idx.latest_eu_target_age_max IS NOT NULL) AS eu_age_max,
+      MIN(idx.latest_uk_target_age_min) FILTER (WHERE idx.latest_uk_target_age_min IS NOT NULL) AS uk_age_min,
+      MAX(idx.latest_uk_target_age_max) FILTER (WHERE idx.latest_uk_target_age_max IS NOT NULL) AS uk_age_max,
       MAX(idx.latest_instagram_followers) AS ig_followers,
       MAX(idx.latest_facebook_likes) AS fb_likes
     FROM (
@@ -433,8 +442,10 @@ export async function getBrandDirectory(
       hasUkEvidence: r.has_uk === true,
       peakEuReach: num(r.eu_reach_max),
       combinedEuReach: num(r.eu_reach_combined),
-      targetAgeMin: r.age_min,
-      targetAgeMax: r.age_max,
+      euTargetAgeMin: r.eu_age_min ?? null,
+      euTargetAgeMax: r.eu_age_max ?? null,
+      ukTargetAgeMin: r.uk_age_min ?? null,
+      ukTargetAgeMax: r.uk_age_max ?? null,
     },
     authority: {
       instagramFollowers: num(r.ig_followers),
