@@ -140,12 +140,26 @@ export function BrandCard({
             </p>
           )}
 
-          {/* Regional targeted-age summary (EU/UK transparency disclosures only).
-              MIN disclosed min / MAX disclosed max across the brand's ads.
-              Rendered only when source data supports it — no fake fallbacks. */}
-          {item.transparency.targetAgeMin !== null && item.transparency.targetAgeMax !== null && (
-            <p className="mt-1 font-mono text-[10px] text-[#686e7b]" title="Targeted age range disclosed in EU/UK transparency data">
-              EU/UK age {item.transparency.targetAgeMin}–{item.transparency.targetAgeMax}
+          {/* Target age ranges — EU/UK transparency disclosures kept SEPARATE
+              (independent regional targeting regimes; never merged into one
+              envelope). Source term: "target age" — declared targeting
+              constraints, NOT observed audience composition. Rendered only when
+              the region actually discloses it; no fake fallback. */}
+          {(item.transparency.euTargetAgeMin !== null && item.transparency.euTargetAgeMax !== null) || (item.transparency.ukTargetAgeMin !== null && item.transparency.ukTargetAgeMax !== null) && (
+            <p
+              className="mt-1 font-mono text-[10px] text-[#686e7b]"
+              title="Target age range disclosed in EU/UK transparency data — declared targeting, not observed audience."
+            >
+              {[
+                item.transparency.euTargetAgeMin !== null && item.transparency.euTargetAgeMax !== null
+                  ? `EU ${item.transparency.euTargetAgeMin}–${item.transparency.euTargetAgeMax}`
+                  : null,
+                item.transparency.ukTargetAgeMin !== null && item.transparency.ukTargetAgeMax !== null
+                  ? `UK ${item.transparency.ukTargetAgeMin}–${item.transparency.ukTargetAgeMax}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           )}
 
