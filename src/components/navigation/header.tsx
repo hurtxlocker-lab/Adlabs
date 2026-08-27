@@ -2,9 +2,27 @@ import Link from "next/link";
 
 interface HeaderProps {
   corpusCount?: number;
+  /** Current pathname for active-state styling (server-computed). */
+  active?: "discover" | "brands";
 }
 
-export function Header({ corpusCount }: HeaderProps) {
+function navLink(href: string, label: string, isActive: boolean) {
+  return (
+    <Link
+      href={href}
+      className={`text-xs font-sans tracking-wide pb-1 transition-colors ${
+        isActive
+          ? "text-[#f3f4f6] font-medium border-b-2 border-[#d46b38]"
+          : "text-[#8e95a2] hover:text-[#f3f4f6]"
+      }`}
+      aria-current={isActive ? "page" : undefined}
+    >
+      {label}
+    </Link>
+  );
+}
+
+export function Header({ corpusCount, active = "discover" }: HeaderProps) {
   return (
     <header className="w-full border-b border-[#16181f] bg-[#07080a]/90 backdrop-blur-md sticky top-0 z-40">
       <div className="adlabs-canvas h-14 flex items-center justify-between">
@@ -19,18 +37,8 @@ export function Header({ corpusCount }: HeaderProps) {
           </Link>
 
           <nav className="flex items-center gap-6" aria-label="Main Navigation">
-            <Link
-              href="/discover"
-              className="text-xs font-sans tracking-wide text-[#f3f4f6] font-medium border-b-2 border-[#d46b38] pb-1"
-            >
-              Discover
-            </Link>
-            <span
-              className="text-xs font-sans tracking-wide text-[#4e535e] cursor-not-allowed select-none"
-              title="Coming in later milestone"
-            >
-              Brands
-            </span>
+            {navLink("/discover", "Discover", active === "discover")}
+            {navLink("/brands", "Brands", active === "brands")}
           </nav>
         </div>
 
