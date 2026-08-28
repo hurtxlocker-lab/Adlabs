@@ -17,6 +17,16 @@ export const discoverySortEnum = [
 export const discoverySortSchema = z.enum(discoverySortEnum).default("RECENTLY_SEEN");
 
 const uuidSchema = z.string().uuid();
+/**
+ * Brand filter tokens accept either internal UUIDs (legacy interactive-filter
+ * links) or public brand slugs (Brands Atlas card links, KT §J — no UUIDs in
+ * URLs). Resolution happens in the predicate compiler against the brands table;
+ * unknown tokens simply match zero rows (never a 500).
+ */
+const brandTokenSchema = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "uuid")
+  .or(z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "slug"));
 const countryCodeSchema = z
   .string()
   .trim()
@@ -36,7 +46,7 @@ const stringOrBigIntSchema = z
 export const discoveryFilterInputSchema = z
   .object({
     // Identity
-    brandIds: z.array(uuidSchema).optional(),
+    brandIds: z.array(brandTokenSchema).optional(),
     sourceAccountIds: z.array(uuidSchema).optional(),
 
     // Lifecycle

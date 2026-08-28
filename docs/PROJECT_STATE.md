@@ -201,3 +201,65 @@ without relying on ephemeral, time-expiring Meta CDN media URLs.
 
 ## Operating Principle
 The codebase is the durable project memory. When implementation decisions and chat context diverge, committed architecture documentation, schema definitions, and automated test suites represent the authoritative engineering truth. Any alterations to frozen domain invariants require explicit review and documentation updates.
+
+---
+
+## Media Gateway Deployment Note (2026-08-26)
+Commit `4609acf` (immutable edge caching for media Worker) was merged Aug 23 but **never deployed to Cloudflare** — live `media.brainfoods.in` continued emitting the old `Cache-Control: private, no-transform` on all success paths. Discovered via header fingerprinting during Phase 5C.1 production measurement closure.
+
+Deployed Aug 26 (wrangler, version `4608ff0e`). Verified live:
+- Image derivative GET: `Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable`; repeat requests serve `CF-Cache-Status: HIT`
+- Video full GET (200) and Range (206 + correct Content-Range): both carry immutable cache policy; seeking intact
+- R2 binding unchanged (`brainfoods-ads-dev`); custom domain route unchanged (`media.brainfoods.in`)
+
+---
+
+## Brands Atlas — Phase M1B (2026-08-26)
+Branch: `feat/brands-atlas` (isolated worktree `../adlabs-brands-page`, commit `0be1325`, NOT pushed).
+
+- **New surface:** `/brands` — "The Competitive Landscape": brands as first-class intelligence entities.
+- **Polaroid Dossier cards:** representative creative (browse-image-v1) portrait + editorial name +
+  EU/UK transparency pins (presence only, never summed) + observation pulse sparkline + live group
+  count + audience band (disclosed EU age range on fixed 18–65 axis) + IG/FB social authority.
+- **Query:** `getBrandDirectory()` — single grouped aggregate over `ad_discovery_index` JOIN brands;
+  per-lens SQL ordering (server-authoritative); client search filters instantly over server order.
+- **4 sort lenses:** Most Creatives (default) · Recently Active · Reach Scale · Social Authority;
+  narration line states the active lens doctrine-style ("where reported").
+- **Header:** dead "Brands" span replaced by live nav link with active-state prop (`active=`).
+- **Verified:** tsc clean, eslint clean, 62 test files pass, next build ok; REACH_SCALE lens
+  live-ordered rhode→Garnier→Summer Fridays→Eucerin→La Roche-Posay→Huda Beauty (matches raw SQL truth).
+- **Craft refs vendored:** `.agents/skills/design-craft/reference/` (motion, interaction-states,
+  anti-slop from h3nryprod01/design-taste MIT).
+- **Known finding:** brand filter URL exposes internal brand UUID on Discover (`?brand=<uuid>`) —
+  violates KT §J token rule; backlog fix: slug/token mapping. RSC payload ~440KB linear growth noted.
+
+---
+
+---
+
+## Technical Debt Register
+
+### TD-1: Query normalization bypass heuristics (logged 2026-08-26)
+Discovery query entry points use duck-typing to detect "already normalized"
+filter objects and may skip `discoveryFilterInputSchema.parse()`.
+
+- Locations: `src/discovery/filters/query.ts` ~L88, ~L288, ~L408
+- Risk: shape-based detection can trust raw URL inputs and bind unvalidated
+  values against typed columns. Realized once as the brand-slug 500
+  (`?brand=huel` bound to uuid column) — fixed at the contract boundary in
+  `feat/brands-atlas` commit `3b10c96` by accepting slug tokens explicitly.
+- Remediation (post-release): replace parse-bypass heuristics with an explicit
+  contract — raw/public inputs ALWAYS parse through the schema; internally
+  normalized inputs use a distinct type/API boundary; no trust inferred from
+  field presence. Add regression tests proving raw URL inputs cannot bypass
+  normalization.
+- Constraint: do NOT change during Brands Atlas release stabilization.
+
+---
+
+## 1-Product Working Trees Unification (2026-08-29)
+Merged all working trees into unified codebase on `main`:
+- **Merged Surfaces**: `/discover` (Packed Field + Discover filters), `/brands` (Brands Atlas with Polaroid Dossier cards + real-time client search + 4 sort lenses), `/ads/[id]` (Detail view + Intelligence Console Hero).
+- **Slug Token Support**: `?brand=<slug>` URL parameters supported across contract and predicate compilers, preventing 500 errors when navigating from Brands to Discover.
+- **Bug Fixes**: Fixed search filter disconnection in `BrandAtlasView`, fixed operator precedence bug in `BrandCard` age disclosures, cleaned up UTF-8 formatting, and stabilized detector unit test timeouts.
+- **Validation**: 64 test suites (581 tests) passing, `tsc --noEmit` clean (0 errors), Next.js production build succeeded, and LLMGraph indexes synchronized.

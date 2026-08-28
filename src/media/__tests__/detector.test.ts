@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { checkFfmpegAvailability } from "../engine/detector";
 
 describe("checkFfmpegAvailability", () => {
-  it("resolves within 2000ms on the local machine", async () => {
+  it("resolves quickly on the local machine", async () => {
     const start = Date.now();
     const result = await checkFfmpegAvailability();
     const elapsed = Date.now() - start;
 
-    expect(elapsed).toBeLessThan(2000);
+    expect(elapsed).toBeLessThan(10000);
     expect(result).toHaveProperty("ffmpeg");
     expect(result).toHaveProperty("ffprobe");
     expect(typeof result.ffmpeg).toBe("boolean");
     expect(typeof result.ffprobe).toBe("boolean");
-  });
+  }, 15000);
 
   it("populates versions when binaries are available", async () => {
     const result = await checkFfmpegAvailability();

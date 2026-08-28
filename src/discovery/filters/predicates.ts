@@ -1,4 +1,4 @@
-import { adDiscoveryIndex } from "@/db/schema";
+import { adDiscoveryIndex, brands } from "@/db/schema";
 import { eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import type { DiscoveryFilterGroup, NormalizedDiscoveryFilters } from "./types";
 
@@ -26,7 +26,28 @@ export function compileDiscoveryPredicates(
   // 1. Identity
   if (!excluded.has("IDENTITY")) {
     if (filters.brandIds && filters.brandIds.length > 0) {
-      predicates.push(inArray(adDiscoveryIndex.brandId, filters.brandIds));
+      // Mixed tokens allowed: internal UUIDs and/or public brand slugs
+      // (Brands Atlas links use slugs per KT §J). Slugs resolve against the
+      // brands table; unknown tokens yield zero rows instead of a 500.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const uuids = filters.brandIds.filter((t) => UUID_RE.test(t));
+      const slugs = filters.brandIds.filter((t) => !UUID_RE.test(t));
+      const uuidPredicate =
+        uuids.length > 0 ? inArray(adDiscoveryIndex.brandId, uuids) : undefined;
+      const slugPredicate =
+        slugs.length > 0
+          ? sql`${adDiscoveryIndex.brandId} IN (SELECT ${brands.id} FROM ${brands} WHERE lower(${brands.slug}) IN (${sql.join(
+              slugs.map((s) => sql`${s.toLowerCase()}`),
+              sql`, `,
+            )}))`
+          : undefined;
+      if (uuidPredicate && slugPredicate) {
+        predicates.push(sql`(${uuidPredicate} OR ${slugPredicate})`);
+      } else if (uuidPredicate) {
+        predicates.push(uuidPredicate);
+      } else if (slugPredicate) {
+        predicates.push(slugPredicate);
+      }
     }
     if (filters.sourceAccountIds && filters.sourceAccountIds.length > 0) {
       predicates.push(inArray(adDiscoveryIndex.sourceAccountId, filters.sourceAccountIds));
