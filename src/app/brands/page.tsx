@@ -41,6 +41,10 @@ export default async function BrandsPage({
 
   const items = await getBrandDirectory(sort);
 
+  const totalLibraryAds = items.reduce(
+    (s, i) => s + (i.creativeFootprint.libraryTotalAds ?? i.creativeFootprint.creativeCount),
+    0,
+  );
   const totalCreatives = items.reduce((s, i) => s + i.creativeFootprint.creativeCount, 0);
   const activeCount = items.filter(
     (i) => i.creativeFootprint.activeCreativeCount > 0,
@@ -76,7 +80,10 @@ export default async function BrandsPage({
               <span className="text-[#f3f4f6]">{items.length}</span> brands
             </span>
             <span>
-              <span className="text-[#f3f4f6]">{totalCreatives}</span> creatives
+              <span className="text-[#f3f4f6]">{totalLibraryAds.toLocaleString()}</span> ads in library
+            </span>
+            <span>
+              <span className="text-[#f3f4f6]">{totalCreatives}</span> indexed creatives
             </span>
             <span>
               <span className="text-[#f3f4f6]">{activeCount}</span> currently active

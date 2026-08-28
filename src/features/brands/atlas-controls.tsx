@@ -15,7 +15,7 @@ const LENSES: Array<{ id: SortLens; label: string }> = [
 ];
 
 const LENS_NARRATION: Record<SortLens, string> = {
-  MOST_CREATIVES: "Ranked by disclosed creative volume.",
+  MOST_CREATIVES: "Ranked by disclosed Meta Ad Library scale and creative volume.",
   RECENTLY_ACTIVE: "Ranked by latest observation recency.",
   REACH_SCALE: "Ranked by disclosed EU reach — where reported.",
   SOCIAL_AUTHORITY: "Ranked by Instagram audience size — where known.",
@@ -40,7 +40,9 @@ function contextLine(item: BrandDirectoryItem, lens: LensKind): string {
   const { creativeFootprint: cf, transparency: t, authority: a } = item;
   switch (lens) {
     case "RECENTLY_ACTIVE":
-      return recencyText(cf.lastSeenAt);
+      return recencyText(
+        cf.lastSeenAt instanceof Date ? cf.lastSeenAt : new Date(cf.lastSeenAt),
+      );
     case "REACH_SCALE":
       return t.peakEuReach !== null
         ? `Peak EU reach ${formatCompact(t.peakEuReach)}`
@@ -51,10 +53,14 @@ function contextLine(item: BrandDirectoryItem, lens: LensKind): string {
         : a.facebookLikes !== null
           ? `Facebook ${formatCompact(a.facebookLikes)}`
           : "No authority data";
+    case "MOST_CREATIVES":
     default:
+      if (cf.libraryTotalAds !== null) {
+        return `${cf.libraryTotalAds.toLocaleString()} ads in library`;
+      }
       return cf.activeCreativeCount > 0
-        ? `${cf.creativeCount} creatives · ${cf.activeCreativeCount} active`
-        : `${cf.creativeCount} creatives`;
+        ? `${cf.creativeCount} scraped creatives · ${cf.activeCreativeCount} active`
+        : `${cf.creativeCount} scraped creatives`;
   }
 }
 
@@ -131,10 +137,19 @@ function ClientBrandCard({
           </p>
 
           {/* Secondary deployment fact */}
-          {item.creativeFootprint.activeAdCount > 0 && (
+          {item.creativeFootprint.libraryTotalAds !== null ? (
             <p className="mt-1 font-mono text-[10px] tabular-nums text-[#686e7b]">
-              {item.creativeFootprint.activeAdCount} active ads
+              {item.creativeFootprint.creativeCount} in corpus
+              {item.creativeFootprint.activeCreativeCount > 0
+                ? ` · ${item.creativeFootprint.activeCreativeCount} active`
+                : ""}
             </p>
+          ) : (
+            item.creativeFootprint.activeAdCount > 0 && (
+              <p className="mt-1 font-mono text-[10px] tabular-nums text-[#686e7b]">
+                {item.creativeFootprint.activeAdCount} active ads in corpus
+              </p>
+            )
           )}
 
           {/* Honest recency for non-recency lenses */}

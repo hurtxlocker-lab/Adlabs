@@ -261,6 +261,23 @@ describe("reach zero-vs-null semantics", () => {
   });
 });
 
+describe("Library total ads vs scraped corpus counts contract", () => {
+  it("distinguishes between Meta Ad Library total scale and local scraped batch", () => {
+    const mockPayloadTotal = 595;
+    const scrapedCreativeCount = 5;
+    const scrapedActiveCreativeCount = 5;
+
+    const contextLine = (libraryTotal: number | null, scrapedCount: number, activeCount: number) => {
+      if (libraryTotal !== null) return `${libraryTotal.toLocaleString()} ads in library`;
+      return activeCount > 0 ? `${scrapedCount} scraped creatives · ${activeCount} active` : `${scrapedCount} scraped creatives`;
+    };
+
+    expect(contextLine(mockPayloadTotal, scrapedCreativeCount, scrapedActiveCreativeCount)).toBe("595 ads in library");
+    expect(contextLine(null, 10, 10)).toBe("10 scraped creatives · 10 active");
+    expect(contextLine(null, 10, 0)).toBe("10 scraped creatives");
+  });
+});
+
 describe("Honesty regression guard", () => {
   it("no fake activity/sparkline code remains reachable from Brands feature", async () => {
     const fs = t_fs;

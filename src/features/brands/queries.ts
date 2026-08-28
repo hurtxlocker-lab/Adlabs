@@ -24,6 +24,7 @@ import "server-only";
 import { db } from "@/db/client";
 import {
   adDiscoveryIndex,
+  ads,
   brands,
   mediaAssets,
   mediaDerivatives,
@@ -44,12 +45,16 @@ export interface BrandDirectoryItem {
     category: string | null;
   };
   creativeFootprint: {
+    /** Total ads disclosed by Meta in the Ad Library (from Curious Coder payload `total`), or null if not reported. */
+    libraryTotalAds: number | null;
     /** Distinct representative creative SHA-256 binaries in corpus. */
     creativeCount: number;
-    /** Distinct representative creative SHA-256 binaries currently running. */
+    /** Distinct representative creative SHA-256 binaries currently running in corpus. */
     activeCreativeCount: number;
-    /** Canonical ad deployments currently running. */
+    /** Canonical ad deployments currently running in corpus. */
     activeAdCount: number;
+    /** Total ad rows in corpus. */
+    scrapedAdCount: number;
     lastSeenAt: Date;
   };
   transparency: {
@@ -82,6 +87,8 @@ interface BrandFactsRow extends Record<string, unknown> {
   creative_groups: string | number;
   active_groups: string | number;
   active_ads: string | number;
+  scraped_ads: string | number;
+  library_total_ads: string | number | null;
   last_seen_at: string;
   first_seen_at: string;
   has_eu: boolean;
@@ -111,21 +118,21 @@ function num(val: string | number | null | undefined): number | null {
 }
 
 /**
- * PHASE A — Single grouped aggregate query over ad_discovery_index JOIN brands.
+ * PHASE A — Single grouped aggregate query over ad_discovery_index JOIN brands JOIN ads.
  * Binds sort order at SQL level for server-authoritative ordering.
  */
 async function getBrandFacts(sort: BrandDirectorySort): Promise<BrandFactsRow[]> {
   const orderClause = (() => {
     switch (sort) {
       case "RECENTLY_ACTIVE":
-        return sql`max(idx.last_seen_at) DESC, count(DISTINCT idx.representative_media_sha256) DESC, b.name ASC`;
+        return sql`max(idx.last_seen_at) DESC, COALESCE(max(CASE WHEN (a.raw_last_payload->>'total') IS NOT NULL AND (a.raw_last_payload->>'total') ~ '^[0-9]+$' THEN (a.raw_last_payload->>'total')::int END), count(DISTINCT idx.representative_media_sha256)) DESC, b.name ASC`;
       case "REACH_SCALE":
         return sql`max(idx.latest_eu_total_reach) DESC NULLS LAST, count(DISTINCT idx.representative_media_sha256) DESC, b.name ASC`;
       case "SOCIAL_AUTHORITY":
         return sql`max(idx.latest_instagram_followers) DESC NULLS LAST, max(idx.latest_facebook_likes) DESC NULLS LAST, count(DISTINCT idx.representative_media_sha256) DESC, b.name ASC`;
       case "MOST_CREATIVES":
       default:
-        return sql`count(DISTINCT idx.representative_media_sha256) DESC, max(idx.last_seen_at) DESC, b.name ASC`;
+        return sql`COALESCE(max(CASE WHEN (a.raw_last_payload->>'total') IS NOT NULL AND (a.raw_last_payload->>'total') ~ '^[0-9]+$' THEN (a.raw_last_payload->>'total')::int END), count(DISTINCT idx.representative_media_sha256)) DESC, max(idx.last_seen_at) DESC, b.name ASC`;
     }
   })();
 
@@ -138,6 +145,8 @@ async function getBrandFacts(sort: BrandDirectorySort): Promise<BrandFactsRow[]>
       count(DISTINCT idx.representative_media_sha256) AS creative_groups,
       count(DISTINCT CASE WHEN idx.is_active THEN idx.representative_media_sha256 END) AS active_groups,
       count(DISTINCT CASE WHEN idx.is_active THEN idx.ad_id END) AS active_ads,
+      count(DISTINCT idx.ad_id) AS scraped_ads,
+      max(CASE WHEN (a.raw_last_payload->>'total') IS NOT NULL AND (a.raw_last_payload->>'total') ~ '^[0-9]+$' THEN (a.raw_last_payload->>'total')::int END) AS library_total_ads,
       max(idx.last_seen_at) AS last_seen_at,
       min(idx.first_seen_at) AS first_seen_at,
       bool_or(idx.has_eu_transparency_evidence) AS has_eu,
@@ -152,6 +161,7 @@ async function getBrandFacts(sort: BrandDirectorySort): Promise<BrandFactsRow[]>
       max(idx.latest_facebook_likes) AS fb_likes
     FROM ${adDiscoveryIndex} idx
     INNER JOIN ${brands} b ON b.id = idx.brand_id
+    INNER JOIN ${ads} a ON a.id = idx.ad_id
     WHERE idx.representative_media_sha256 IS NOT NULL
     GROUP BY b.id, b.slug, b.name
     ORDER BY ${orderClause}
@@ -381,9 +391,11 @@ export async function getBrandDirectory(
       category: r.category ?? null,
     },
     creativeFootprint: {
+      libraryTotalAds: num(r.library_total_ads),
       creativeCount: Number(r.creative_groups),
       activeCreativeCount: Number(r.active_groups),
       activeAdCount: Number(r.active_ads),
+      scrapedAdCount: Number(r.scraped_ads),
       lastSeenAt: new Date(r.last_seen_at),
     },
     transparency: {

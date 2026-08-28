@@ -47,10 +47,14 @@ function contextLine(
         : a.facebookLikes !== null
           ? `Facebook ${formatCompact(a.facebookLikes)}`
           : "No authority data";
+    case "MOST_CREATIVES":
     default:
+      if (cf.libraryTotalAds !== null) {
+        return `${cf.libraryTotalAds.toLocaleString()} ads in library`;
+      }
       return cf.activeCreativeCount > 0
-        ? `${cf.creativeCount} creatives · ${cf.activeCreativeCount} active`
-        : `${cf.creativeCount} creatives`;
+        ? `${cf.creativeCount} scraped creatives · ${cf.activeCreativeCount} active`
+        : `${cf.creativeCount} scraped creatives`;
   }
 }
 
@@ -127,10 +131,19 @@ export function BrandCard({
 
           {/* Secondary deployment fact — never promoted above the lens line.
               Factual only: canonical ad deployments currently Running. */}
-          {item.creativeFootprint.activeAdCount > 0 && (
+          {item.creativeFootprint.libraryTotalAds !== null ? (
             <p className="mt-1 font-mono text-[10px] tabular-nums text-[#686e7b]">
-              {item.creativeFootprint.activeAdCount} active ads
+              {item.creativeFootprint.creativeCount} in corpus
+              {item.creativeFootprint.activeCreativeCount > 0
+                ? ` · ${item.creativeFootprint.activeCreativeCount} active`
+                : ""}
             </p>
+          ) : (
+            item.creativeFootprint.activeAdCount > 0 && (
+              <p className="mt-1 font-mono text-[10px] tabular-nums text-[#686e7b]">
+                {item.creativeFootprint.activeAdCount} active ads in corpus
+              </p>
+            )
           )}
 
           {/* Honest recency for non-recency lenses */}
