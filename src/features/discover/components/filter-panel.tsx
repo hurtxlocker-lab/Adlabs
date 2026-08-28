@@ -7,7 +7,7 @@
  * Controls reflect evidence density from facets.
  */
 
-import { useCallback, useOptimistic, useTransition } from "react";
+import { useCallback, useMemo, useOptimistic, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type {
   DiscoveryFacetsResult,
@@ -20,6 +20,8 @@ import {
   parseDiscoveryFiltersFromParams,
   parseSortFromParams,
 } from "../utils/url-filters";
+import { BrandSearchBar } from "./brand-search-bar";
+import type { SearchableBrand } from "../utils/brand-search";
 import { FilterRail } from "./filters/filter-rail";
 import { MoreFiltersPopover } from "./filters/more-filters";
 import { ActiveFilterTokens } from "./filters/active-filter-tokens";
@@ -31,6 +33,7 @@ export interface FilterPanelProps {
   totalCount: number;
   totalAdsCount?: number;
   brandNameMap?: Record<string, string>;
+  brandCatalogue?: SearchableBrand[];
 }
 
 export function FilterPanel({
@@ -38,6 +41,7 @@ export function FilterPanel({
   totalCount,
   totalAdsCount,
   brandNameMap,
+  brandCatalogue,
 }: FilterPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -197,12 +201,27 @@ export function FilterPanel({
     (currentFilter.instagramFollowersMin !== undefined ? 1 : 0) +
     (currentFilter.hasUkTransparencyEvidence === true ? 1 : 0);
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  const searchableBrands: SearchableBrand[] = useMemo(() => {
+    if (brandCatalogue && brandCatalogue.length > 0) return brandCatalogue;
+    return (facets.brands ?? []).map((b) => ({
+      slug: b.brandSlug,
+      name: b.brandName,
+      category: b.category ?? null,
+      creativeCount: b.count,
+    }));
+  }, [brandCatalogue, facets.brands]);
 
   return (
-    <div className="w-full font-sans" data-testid="filter-panel">
+    <div className="w-full font-sans flex flex-col gap-4" data-testid="filter-panel">
+      {/* Brand Search Bar — Primary, instant-response brand search */}
+      <BrandSearchBar
+        brands={searchableBrands}
+        selectedSlugs={currentFilter.brandIds ?? []}
+        onToggleBrandSlug={(slug) => toggleStringArray("brandIds", slug)}
+        onClearAllBrands={() => clearSingle("brandIds")}
+        brandNameMap={brandNameMap}
+      />
+
       {/* Desktop primary rail */}
       <div className="hidden lg:flex flex-col gap-4">
         <FilterRail
@@ -226,7 +245,7 @@ export function FilterPanel({
       </div>
 
       {/* Mobile compact row */}
-      <div className="lg:hidden flex flex-wrap items-center gap-3 mb-4">
+      <div className="lg:hidden flex flex-wrap items-center gap-3 mb-2">
         <MoreFiltersPopover
           {...moreFiltersContentProps}
           triggerLabel="Filters"

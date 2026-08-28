@@ -67,7 +67,7 @@ export const mockFacets: DiscoveryFacetsResult = {
     { key: "100K_500K", label: "100K–500K", count: 12 },
     { key: "500K_PLUS", label: "500K+", count: 0 },
   ],
-  brands: [{ brandId: "brand-1", brandName: "Evolv", count: 21 }],
+  brands: [{ brandId: "brand-1", brandName: "Evolv", brandSlug: "evolv", count: 21 }],
 };
 
 const noop = () => undefined;

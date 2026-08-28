@@ -40,6 +40,8 @@ interface TransparencyDbResult extends Record<string, unknown> {
 interface BrandFacetDbResult extends Record<string, unknown> {
   brand_id: string;
   brand_name: string;
+  brand_slug: string;
+  category: string | null;
   cnt: string | number;
 }
 
@@ -236,17 +238,19 @@ export async function computeDiscoveryFacets(
         GROUP BY band_key
       `),
 
-    // 11. Brands (Disjunctive — excludes IDENTITY group, joins brands for display name)
+    // 11. Brands (Disjunctive — excludes IDENTITY group, joins brands for display name, slug, category)
     () =>
       dbClient.execute<BrandFacetDbResult>(sql`
         SELECT
           ${adDiscoveryIndex.brandId} as brand_id,
           ${brands.name} as brand_name,
+          ${brands.slug} as brand_slug,
+          max(${brands.category}) as category,
           ${groupCountExpr} as cnt
         FROM ${adDiscoveryIndex}
         INNER JOIN ${brands} ON ${brands.id} = ${adDiscoveryIndex.brandId}
         WHERE ${getWhere("IDENTITY")}
-        GROUP BY ${adDiscoveryIndex.brandId}, ${brands.name}
+        GROUP BY ${adDiscoveryIndex.brandId}, ${brands.name}, ${brands.slug}
         ORDER BY cnt DESC, ${brands.name} ASC
       `),
   ];
@@ -326,6 +330,8 @@ export async function computeDiscoveryFacets(
     return list.map((r) => ({
       brandId: r.brand_id,
       brandName: r.brand_name,
+      brandSlug: r.brand_slug,
+      category: r.category ?? null,
       count: Number(r.cnt),
     }));
   };

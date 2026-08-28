@@ -1,16 +1,15 @@
-"use client";
-
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   DiscoveryFacetsResult,
   DiscoveryFilterInput,
 } from "@/discovery/filters/types";
+import { searchBrands, type SearchableBrand } from "@/features/discover/utils/brand-search";
 import { NativePopover } from "./native-popover";
 
 export interface BrandFilterPopoverProps {
   facets: DiscoveryFacetsResult;
   filter: DiscoveryFilterInput;
-  onToggleBrand: (brandId: string) => void;
+  onToggleBrand: (brandSlugOrId: string) => void;
   brandNameMap?: Record<string, string>;
 }
 
@@ -25,19 +24,28 @@ export function BrandFilterPopover({
   brandNameMap,
 }: BrandFilterPopoverProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const activeBrandIds = filter.brandIds ?? [];
-  const totalSelected = activeBrandIds.length;
+  const activeBrandTokens = filter.brandIds ?? [];
+  const totalSelected = activeBrandTokens.length;
   const brands = facets.brands;
 
-  const filteredBrands = brands.filter((b) =>
-    b.brandName.toLowerCase().includes(searchTerm.trim().toLowerCase()),
-  );
+  const searchableBrands: SearchableBrand[] = useMemo(() => {
+    return brands.map((b) => ({
+      slug: b.brandSlug,
+      name: b.brandName,
+      category: b.category ?? null,
+      creativeCount: b.count,
+    }));
+  }, [brands]);
+
+  const filteredBrands = useMemo(() => {
+    return searchBrands(searchableBrands, searchTerm);
+  }, [searchableBrands, searchTerm]);
 
   let triggerLabel = "Brand";
   if (totalSelected === 1) {
     const singleBrand =
-      brands.find((b) => b.brandId === activeBrandIds[0])?.brandName ??
-      brandNameMap?.[activeBrandIds[0]];
+      brands.find((b) => b.brandSlug === activeBrandTokens[0] || b.brandId === activeBrandTokens[0])?.brandName ??
+      brandNameMap?.[activeBrandTokens[0]];
     triggerLabel = singleBrand ? singleBrand : "Brand · 1";
   } else if (totalSelected > 1) {
     triggerLabel = `Brand · ${totalSelected}`;
@@ -89,26 +97,26 @@ export function BrandFilterPopover({
           <div className="overflow-y-auto max-h-[260px] flex flex-col gap-1 pr-1">
             {filteredBrands.length > 0 ? (
               filteredBrands.map((b) => {
-                const isChecked = activeBrandIds.includes(b.brandId);
+                const isChecked = activeBrandTokens.includes(b.slug);
                 return (
                   <label
-                    key={b.brandId}
+                    key={b.slug}
                     className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs text-[#9da2ad] hover:text-[#f3f4f6] hover:bg-[#12151c] rounded-[2px] cursor-pointer select-none transition-colors"
                   >
                     <div className="flex items-center gap-2 truncate">
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => onToggleBrand(b.brandId)}
+                        onChange={() => onToggleBrand(b.slug)}
                         className="accent-[#d46b38] w-3.5 h-3.5 rounded-[2px] cursor-pointer"
                       />
                       <span
                         className={`truncate ${isChecked ? "text-[#f3f4f6] font-medium" : ""}`}
                       >
-                        {b.brandName}
+                        {b.name}
                       </span>
                     </div>
-                    <CountBadge count={b.count} />
+                    <CountBadge count={b.creativeCount} />
                   </label>
                 );
               })

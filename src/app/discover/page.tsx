@@ -10,6 +10,7 @@ import {
   queryDiscoveryCreatives,
   queryDiscoveryFacets,
 } from "@/discovery/filters";
+import { getDiscoverBrandCatalogue } from "@/features/discover/queries/catalogue";
 import {
   parseDiscoveryFiltersFromParams,
   parseSortFromParams,
@@ -49,10 +50,11 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     500,
   );
 
-  // Run discovery creative group query + facets in parallel
-  const [result, facets] = await Promise.all([
+  // Run discovery creative group query + facets + stable brand catalogue in parallel
+  const [result, facets, brandCatalogue] = await Promise.all([
     queryDiscoveryCreatives({ filters: filterInput, sort, pageSize: currentLimit }),
     queryDiscoveryFacets({ filters: filterInput }),
+    getDiscoverBrandCatalogue(),
   ]);
 
   // Hydrate representative canonical ads for each group (order strictly preserved)
@@ -73,16 +75,21 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     });
   }
 
-  // Collect brand names for token and UI display (guarantees human name display even outside top facets)
+  // Collect brand names for token and UI display (guarantees human name display even at zero facet matches)
   const brandNameMap: Record<string, string> = {};
+  for (const b of brandCatalogue) {
+    brandNameMap[b.slug] = b.name;
+  }
   for (const b of facets.brands) {
     brandNameMap[b.brandId] = b.brandName;
+    brandNameMap[b.brandSlug] = b.brandName;
   }
   for (const group of result.items) {
     brandNameMap[group.brandId] = group.brandName;
   }
   for (const item of items) {
     brandNameMap[item.brand.id] = item.brand.name;
+    if (item.brand.slug) brandNameMap[item.brand.slug] = item.brand.name;
   }
 
   return (
@@ -112,6 +119,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
               totalCount={result.totalCreativesCount}
               totalAdsCount={result.totalCanonicalAdsCount}
               brandNameMap={brandNameMap}
+              brandCatalogue={brandCatalogue}
             />
           </Suspense>
         </section>

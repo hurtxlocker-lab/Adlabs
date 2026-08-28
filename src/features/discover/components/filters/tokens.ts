@@ -111,15 +111,14 @@ export function deriveActiveTokens(
     });
   }
 
-  (filter.brandIds ?? []).forEach((id) => {
+  (filter.brandIds ?? []).forEach((token) => {
     const brandName =
-      brandNameMap?.[id] ?? facets.brands.find((b) => b.brandId === id)?.brandName;
-    if (brandName) {
-      tokens.push({
-        label: brandName,
-        onRemove: () => handlers.toggleStringArray("brandIds", id),
-      });
-    }
+      brandNameMap?.[token] ??
+      facets.brands.find((b) => b.brandSlug === token || b.brandId === token)?.brandName;
+    tokens.push({
+      label: brandName ?? token,
+      onRemove: () => handlers.toggleStringArray("brandIds", token),
+    });
   });
 
   (filter.ctaTypes ?? []).forEach((c) =>

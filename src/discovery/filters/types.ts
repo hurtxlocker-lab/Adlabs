@@ -278,6 +278,8 @@ export interface FacetBandCount<K extends string = string> {
 export interface BrandFacetItem {
   brandId: string;
   brandName: string;
+  brandSlug: string;
+  category?: string | null;
   count: number;
 }
 

@@ -23,7 +23,6 @@ import type {
 import type { CreativeShapeFamily } from "@/features/discover/utils/creative-shape";
 import { BandSelectFilter } from "./band-select-filter";
 import { CreativeFilterPopover } from "./creative-filter-popover";
-import { BrandFilterPopover } from "./brand-filter-popover";
 import { CategoryFilterPopover } from "./category-filter-popover";
 import { GeographyFilterPopover } from "./geography-filter-popover";
 import { EvidenceFilterPopover } from "./evidence-filter-popover";
@@ -90,15 +89,7 @@ export function FilterRail({
         }
       />
 
-      {/* 2. BRAND (Searchable Multi-Select Popover) */}
-      <BrandFilterPopover
-        facets={facets}
-        filter={filter}
-        brandNameMap={brandNameMap}
-        onToggleBrand={(brandId) => onToggleStringArray("brandIds", brandId)}
-      />
-
-      {/* 3. CATEGORY (Advertiser Page Category Popover) */}
+      {/* 2. CATEGORY (Advertiser Page Category Popover) */}
       <CategoryFilterPopover
         facets={facets}
         filter={filter}
